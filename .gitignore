@@ -1,0 +1,6 @@
+node_modules/
+dist/
+tools/osm/raw/
+shots/
+*.log
+.DS_Store

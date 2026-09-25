@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#0e1117" />
+    <meta name="description" content="Walk around St Paul's Cathedral, London, and climb the 528 steps to the Golden Gallery — a true-scale first-person 3D sightseeing game." />
+    <title>St Paul's Cathedral — A Walk to the Golden Gallery</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230e1117'/%3E%3Cpath d='M18 50V36h28v14M22 36c0-10 4.5-17 10-17s10 7 10 17M32 19v-9M29 12h6' fill='none' stroke='%23c9a45c' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <!-- Loading / title screen -->
+    <section id="intro" class="intro">
+      <div class="intro-inner">
+        <svg class="intro-dome" viewBox="0 0 300 360" aria-hidden="true">
+          <g fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M150 8v22M144 16h12" />
+            <circle cx="150" cy="38" r="6" />
+            <path d="M143 44h14l-2 10h-10zM139 54h22v26h-22zM136 80h28M141 58v18M159 58v18" />
+            <path d="M80 158c0-44 31-78 70-78s70 34 70 78" />
+            <path d="M92 158c3-38 26-68 58-72M208 158c-3-38-26-68-58-72" opacity=".5" />
+            <path d="M112 158c4-36 18-62 38-68M188 158c-4-36-18-62-38-68" opacity=".35" />
+            <path d="M72 158h156M70 164h160M76 164v34M224 164v34M72 198h156" />
+            <path d="M88 170v24M100 170v24M112 170v24M124 170v24M176 170v24M188 170v24M200 170v24M212 170v24" opacity=".6" />
+            <path d="M58 204h184M56 210h188M62 210v62M238 210v62" />
+            <path d="M70 216v52M82 216v52M96 216v52M108 216v52M192 216v52M204 216v52M218 216v52M230 216v52" opacity=".7" />
+            <path d="M136 214h28v58h-28zM140 222h20M140 234h20" opacity=".6" />
+            <path d="M50 272h200M44 280h212M20 280v60h260v-60" />
+            <path d="M34 292v40M54 292v40M74 292v40M94 292v40M206 292v40M226 292v40M246 292v40M266 292v40" opacity=".55" />
+            <path d="M118 340v-30c0-12 14-18 32-18s32 6 32 18v30" />
+          </g>
+        </svg>
+        <p class="kicker">London · Sir Christopher Wren · 1675–1710</p>
+        <h1>St Paul's Cathedral</h1>
+        <p class="subtitle">A walk to the Golden Gallery — 528 steps, 85 metres above the City</p>
+        <div class="progress" aria-hidden="true"><div class="bar" id="progress-bar"></div></div>
+        <p class="status" id="status">Preparing…</p>
+        <button id="start" class="start" disabled>Enter</button>
+        <p class="hint" id="hint">Headphones recommended · Click to look around · Esc for the menu</p>
+      </div>
+      <p class="credit">True-scale reconstruction · City © OpenStreetMap contributors</p>
+    </section>
+
+    <!-- HUD -->
+    <div id="hud" class="hud hidden">
+      <div class="compass" id="compass"><div class="compass-strip" id="compass-strip"></div><div class="compass-mark"></div><div class="compass-deg" id="compass-deg">0°</div></div>
+      <div class="crosshair" id="crosshair"></div>
+      <div class="place" id="place">
+        <div class="place-name" id="place-name">West Front</div>
+        <div class="place-sub" id="place-sub">Churchyard</div>
+      </div>
+      <div class="alt" id="alt"><span id="alt-m">0.0</span><small> m</small></div>
+      <div class="stairs hidden" id="stairs">
+        <div class="stairs-count"><span id="step-n">0</span><small> / 528 steps</small></div>
+        <div class="stairs-track"><div class="stairs-fill" id="stairs-fill"></div>
+          <div class="stairs-mark" style="bottom: 48.7%"><span>Whispering Gallery · 257</span></div>
+          <div class="stairs-mark" style="bottom: 71.2%"><span>Stone Gallery · 376</span></div>
+          <div class="stairs-mark" style="bottom: 100%"><span>Golden Gallery · 528</span></div>
+        </div>
+      </div>
+      <div class="prompt hidden" id="prompt"></div>
+      <div class="toast hidden" id="toast"></div>
+      <div class="card hidden" id="card"></div>
+      <div class="labels" id="labels"></div>
+      <div class="touch hidden" id="touch"><div class="stick" id="stick"><div class="knob"></div></div>
+        <button class="tbtn" id="t-act">E</button><button class="tbtn" id="t-run">Run</button><button class="tbtn" id="t-menu">≡</button></div>
+    </div>
+
+    <!-- Menu -->
+    <section id="menu" class="menu hidden">
+      <div class="menu-panel">
+        <header><h2>St Paul's Cathedral</h2><p id="menu-where">Churchyard</p></header>
+        <button class="menu-resume" id="resume">Resume</button>
+        <div class="menu-grid">
+          <div class="menu-col">
+            <h3>Travel</h3>
+            <div class="travel" id="travel"></div>
+          </div>
+          <div class="menu-col">
+            <h3>Light</h3>
+            <label class="row">Time <output id="time-out">17:15</output></label>
+            <input type="range" id="time" min="4.5" max="22" step="0.05" value="17.25" />
+            <div class="chips" id="presets"></div>
+            <label class="row">Haze <output id="haze-out">London</output></label>
+            <input type="range" id="haze" min="1" max="8" step="0.1" value="3" />
+            <label class="row">Clouds <output id="cloud-out"></output></label>
+            <input type="range" id="clouds" min="0" max="0.95" step="0.01" value="0.42" />
+            <h3>Settings</h3>
+            <label class="row">Quality <output id="q-out">auto</output></label>
+            <div class="chips" id="quality"></div>
+            <label class="row">Mouse sensitivity</label>
+            <input type="range" id="sens" min="0.3" max="2.5" step="0.05" value="1" />
+            <label class="row">Field of view <output id="fov-out">70°</output></label>
+            <input type="range" id="fov" min="55" max="95" step="1" value="70" />
+            <label class="check"><input type="checkbox" id="labels-on" checked /> Landmark labels at the galleries</label>
+            <label class="check"><input type="checkbox" id="sound-on" checked /> Sound</label>
+          </div>
+          <div class="menu-col">
+            <h3>Controls</h3>
+            <dl class="keys">
+              <dt>W A S D</dt><dd>Walk</dd>
+              <dt>Shift</dt><dd>Hurry</dd>
+              <dt>Mouse</dt><dd>Look</dd>
+              <dt>Right drag / wheel</dt><dd>Binocular zoom</dd>
+              <dt>E</dt><dd>Use door · read plaque</dd>
+              <dt>L</dt><dd>Landmark labels</dd>
+              <dt>T</dt><dd>Cycle time of day</dd>
+              <dt>P</dt><dd>Photo mode</dd>
+              <dt>Esc</dt><dd>Menu</dd>
+            </dl>
+            <p class="about">A true-scale reconstruction of Wren's cathedral from published measurements (Dimock 1900; Wale &amp; Gwynn's 1755 section), OpenStreetMap footprints and the Cathedral's own figures. The surrounding City is built from OpenStreetMap data © OpenStreetMap contributors (ODbL).</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
