@@ -22,6 +22,9 @@ import { monumentRelief } from "./sculpture";
 const F = FLOOR;
 type G = CanvasRenderingContext2D;
 
+/** Where the framed paintings hang (for the information cards). */
+export const HUNG: { id: "lightOfTheWorld" | "annunciation"; x: number; z: number }[] = [];
+
 export function buildPaintings(ctx: Ctx) {
   spandrelMosaics(ctx);
   apseMosaic(ctx);
@@ -623,10 +626,16 @@ function aisles(ctx: Ctx) {
     return best;
   };
   const lotw = pick(true), ann = pick(false);
+  HUNG.length = 0;
   let v = 0;
   AISLE_SPOTS.forEach((s, i) => {
-    if (i === lotw) framedPainting(ctx, lightOfTheWorld(), [s.x, s.z], s.n, F + 3.6, 1.55, 2.7);
-    else if (i === ann) framedPainting(ctx, annunciation(), [s.x, s.z], s.n, F + 3.3, 2.5, 1.8);
+    if (i === lotw) {
+      framedPainting(ctx, lightOfTheWorld(), [s.x, s.z], s.n, F + 3.6, 1.55, 2.7);
+      HUNG.push({ id: "lightOfTheWorld", x: s.x + s.n[0] * 1.5, z: s.z + s.n[1] * 1.5 });
+    } else if (i === ann) {
+      framedPainting(ctx, annunciation(), [s.x, s.z], s.n, F + 3.3, 2.5, 1.8);
+      HUNG.push({ id: "annunciation", x: s.x + s.n[0] * 1.5, z: s.z + s.n[1] * 1.5 });
+    }
     else monument(ctx, [s.x, s.z], s.n, v++);
   });
 }
@@ -646,7 +655,7 @@ function monument(ctx: Ctx, c: V2, n: V2, variant: number) {
     box(white, -1.12, 1.12, F + 1.15, F + 1.3, 0, 0.58);
   });
   black.withPaint({ cav: 0.9 }, () => box(black, -0.8, 0.8, F + 0.45, F + 1.02, 0.48, 0.5));
-  placeRelief(ctx, monumentRelief(1.9, 3.6, variant), [c[0] + n[0] * 0.005, F + 1.3, c[1] + n[1] * 0.005], n, "whiteMarble", { cavK: 7 });
+  placeRelief(ctx, monumentRelief(1.9, 3.6, variant, 0.03), [c[0] + n[0] * 0.005, F + 1.3, c[1] + n[1] * 0.005], n, "whiteMarble", { cavK: 7 });
   const p0 = [c[0] + right[0] * -1.2, c[1] + right[1] * -1.2], p1 = [c[0] + right[0] * 1.2 + n[0] * 0.65, c[1] + right[1] * 1.2 + n[1] * 0.65];
   ctx.col.box(Math.min(p0[0], p1[0]), F - 0.5, Math.min(p0[1], p1[1]), Math.max(p0[0], p1[0]), F + 1.3, Math.max(p0[1], p1[1]));
 }

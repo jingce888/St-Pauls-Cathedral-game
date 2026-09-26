@@ -23,6 +23,8 @@ export class Input implements PlayerInput {
   private pinchDist = 0;
   locked = false;
   touch = false;
+  /** Run held from the touch button. */
+  holdRun = false;
   /** Called on single key presses (not repeats). */
   onKey: ((code: string) => void) | null = null;
   /** Called when the pointer lock is lost without the menu asking for it. */
@@ -170,7 +172,7 @@ export class Input implements PlayerInput {
       y = this.stick.y;
     }
     this.move.set(x, y);
-    this.run = k.has("ShiftLeft") || k.has("ShiftRight") || this.stick.length() > 0.98;
+    this.run = k.has("ShiftLeft") || k.has("ShiftRight") || this.stick.length() > 0.98 || this.holdRun;
     const want = this.rightHeld || k.has("KeyZ") ? Math.max(4, this.zoomTarget) : this.zoomTarget;
     this.zoom += (want - this.zoom) * (1 - Math.exp(-10 * dt));
   }

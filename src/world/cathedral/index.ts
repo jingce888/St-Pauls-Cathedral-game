@@ -19,6 +19,8 @@ export interface CathedralResult {
   group: THREE.Group;
   collision: THREE.BufferGeometry;
   report: Record<string, number>;
+  /** Triangles drawn per instanced prototype. */
+  drawn: Record<string, number>;
   stairs: StairInfo;
 }
 
@@ -63,5 +65,5 @@ export function buildCathedral(app: App, parts: ((ctx: Ctx) => void)[] = []): Ca
   group.name = "cathedral";
   const report = ctx.finish(group);
   const collision = ctx.col.build();
-  return { group, collision, report, stairs };
+  return { group, collision, report, stairs, drawn: ctx.inst.drawn };
 }

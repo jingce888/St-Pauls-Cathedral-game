@@ -10,7 +10,8 @@ export default defineConfig({
     chunkSizeWarningLimit: 1500,
     rollupOptions: {
       output: {
-        manualChunks: { three: ["three"] },
+        // three.js in its own chunk, cached separately from the game code
+        manualChunks: (id: string) => (id.includes("/node_modules/three/") ? "three" : undefined),
       },
     },
   },

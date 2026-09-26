@@ -32,7 +32,7 @@ export const cherubGeo = () => reliefGeo(keystoneCherub(), 0.65, 0.4);
 export const dropGeo = (w: number, len: number, seed: number) => reliefGeo(pierDrop(w, len, 0.028, seed), w / 2, len);
 
 /** Band of carved acanthus standing on the origin (w x h metres): pipe shades, cresting. */
-export const bandGeo = (w: number, h: number, seed: number) => reliefGeo(acanthusBand(w, h, 0.018, seed), w / 2, 0);
+export const bandGeo = (w: number, h: number, seed: number, res = 0.024) => reliefGeo(acanthusBand(w, h, res, seed), w / 2, 0);
 
 /** Spandrel Fame for an arcade arch of radius 3.75: origin at the arch centre, figure towards local +x (or -x). */
 export const fameGeo = (mirror: boolean) => reliefGeo(fameSpandrel(4.72, 5.25, 3.97, mirror), mirror ? 4.72 : 0, 0);

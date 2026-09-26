@@ -28,6 +28,8 @@ export class Instances {
   count(name: string) {
     return this.items.get(name)?.length ?? 0;
   }
+  /** Triangles drawn per prototype (all instances), filled by build(). */
+  readonly drawn: Record<string, number> = {};
   build(mats: MaterialSet, parent: THREE.Object3D) {
     let tris = 0;
     for (const [name, list] of this.items) {
@@ -41,7 +43,9 @@ export class Instances {
       mesh.receiveShadow = true;
       mesh.name = `inst:${name}`;
       parent.add(mesh);
-      tris += (geo.index ? geo.index.count / 3 : geo.getAttribute("position").count / 3) * list.length;
+      const t = (geo.index ? geo.index.count / 3 : geo.getAttribute("position").count / 3) * list.length;
+      this.drawn[name] = t;
+      tris += t;
     }
     return tris;
   }

@@ -6,6 +6,11 @@ import "./ui/style.css";
 import { App, type WorldModule } from "./app/App";
 import { World } from "./world/World";
 import { Game, type PlaceId } from "./game/Game";
+import * as THREE from "three";
+import { Hud } from "./ui/Hud";
+import { Menu } from "./ui/Menu";
+import { where, type Gallery } from "./game/where";
+import { poiAt, type Poi } from "./game/poi";
 
 const app = new App(document.getElementById("app")!);
 const world = new World();
@@ -120,11 +125,105 @@ app
     statusEl.textContent = "Something went wrong: " + (e?.message ?? e);
   });
 
+let ui: ReturnType<typeof startUi> | null = null;
+
+/** HUD, pause menu, information cards and keys, once the world is built. */
+function startUi(g: Game) {
+  const hud = new Hud(world.terrain);
+  const menu = new Menu(app, g);
+  const card = document.getElementById("card")!;
+  const labelsBox = document.getElementById("labels-on") as HTMLInputElement;
+  let photo = false;
+  let lastGallery: Gallery | null = null;
+  let current: Poi | null = null;
+  let shown: Poi | null = null;
+  let whereName = "";
+  const dir = new THREE.Vector3();
+
+  const showCard = (p: Poi | null) => {
+    shown = p;
+    card.classList.toggle("hidden", !p);
+    if (p) card.innerHTML = `<h3>${p.title}</h3><div class="meta">${p.cn} · ${p.meta}</div><p>${p.en}</p><p lang="zh">${p.zh}</p>`;
+  };
+  const openMenu = () => {
+    if (menu.open) return;
+    g.input.clear();
+    g.active = false;
+    menu.setWhere(whereName);
+    menu.show();
+    hud.show(false);
+    g.input.unlock();
+  };
+  menu.onClose = () => {
+    g.active = true;
+    hud.show(true);
+    g.input.lock();
+  };
+  menu.onLabels = (on) => (hud.labelsOn = on);
+  g.input.onUnlock = () => {
+    if (!menu.open && g.active) openMenu();
+  };
+  const act = () => showCard(shown ? null : current);
+  g.input.onKey = (code) => {
+    if (menu.open) {
+      if (code === "Escape") menu.close();
+      return;
+    }
+    if (!g.active) return;
+    switch (code) {
+      case "KeyE": act(); break;
+      case "KeyT": hud.toast(menu.nextTime(), "Time of day · 时间"); break;
+      case "KeyL":
+        hud.labelsOn = !hud.labelsOn;
+        labelsBox.checked = hud.labelsOn;
+        hud.toast(hud.labelsOn ? "Labels on" : "Labels off", "Landmarks from the galleries · 地标标签");
+        break;
+      case "KeyP":
+        photo = !photo;
+        hud.photo(photo);
+        break;
+      case "Tab":
+      case "KeyM":
+        openMenu();
+        break;
+    }
+  };
+  // touch buttons
+  const touchUi = document.getElementById("touch")!;
+  addEventListener("touchstart", () => touchUi.classList.remove("hidden"), { once: true });
+  document.getElementById("t-menu")!.addEventListener("click", openMenu);
+  document.getElementById("t-act")!.addEventListener("click", act);
+  const run = document.getElementById("t-run")!;
+  run.addEventListener("click", () => {
+    g.input.holdRun = !g.input.holdRun;
+    run.classList.toggle("on", g.input.holdRun);
+  });
+
+  app.onFrame((dt) => {
+    if (!g.active) return;
+    const p = g.player;
+    const w = where(p.feet.x, p.feet.y, p.feet.z, world.cathedral.stairs);
+    whereName = w.name;
+    hud.update(dt, app.camera, p.yaw, p.feet.y, w);
+    app.adaptTarget = w.adapt;
+    if (w.gallery && w.gallery !== lastGallery) hud.toast(w.name, w.sub);
+    lastGallery = w.gallery;
+    app.camera.getWorldDirection(dir);
+    current = poiAt(p.feet, app.camera.position, dir);
+    if (shown && shown !== current) showCard(null);
+    hud.prompt(current && !shown ? `<kbd>E</kbd> ${current.title} <small>${current.cn}</small>` : null);
+  });
+  return { hud, menu, openMenu };
+}
+
 startBtn.addEventListener("click", () => {
   document.getElementById("intro")!.classList.add("gone");
   if (game) {
+    ui ??= startUi(game);
     game.goTo("westFront");
     game.active = true;
+    ui.hud.show(true);
+    ui.hud.toast("St Paul's Cathedral", "Ludgate Hill · 圣保罗大教堂");
     game.input.lock();
   }
   app.start();

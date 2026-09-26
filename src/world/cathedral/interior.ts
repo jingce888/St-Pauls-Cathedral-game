@@ -276,7 +276,7 @@ function interiorShell(ctx: Ctx, outline: V2[]) {
       const busy = openings.map((o) => [o.s0 - 1.35, o.s1 + 1.35]);
       let last = -Infinity;
       for (let sc = 1.6; sc <= len - 1.6; sc += 0.25) {
-        if (busy.some(([p, q]) => sc > p && sc < q) || sc - last < 5.5) continue;
+        if (busy.some(([p, q]) => sc > p && sc < q) || sc - last < 8.5) continue;
         const pt = surf.point(sc, 0);
         // not in the crossing's corner bays next to the transepts
         if (Math.abs(pt[0]) < INT.zA + 2.5) continue;

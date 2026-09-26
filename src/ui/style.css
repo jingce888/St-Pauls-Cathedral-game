@@ -145,7 +145,7 @@ html, body {
   color: rgba(255, 255, 255, 0.72);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
-.compass-strip span.card { font-family: var(--serif); font-size: 17px; top: 0; color: #fff; font-weight: 600; }
+.compass-strip span.cardinal { font-family: var(--serif); font-size: 17px; top: 0; color: #fff; font-weight: 600; }
 .compass-strip i {
   position: absolute; top: 20px; width: 1px; height: 5px;
   background: rgba(255, 255, 255, 0.45);
@@ -209,6 +209,8 @@ html, body {
 .card h3 { font-family: var(--serif); font-weight: 500; font-size: 24px; margin: 0 0 4px; }
 .card .meta { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--gold); margin-bottom: 12px; }
 .card p { font-size: 14px; line-height: 1.55; color: rgba(236,228,210,.86); margin: 0 0 10px; }
+.card p[lang="zh"] { font-family: "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", var(--sans); font-size: 13.5px; line-height: 1.7; color: rgba(236,228,210,.74); border-top: 1px solid var(--line); padding-top: 10px; margin-bottom: 0; }
+.prompt small { margin-left: 8px; color: var(--stone-dim); font-size: 12px; }
 
 .labels { position: absolute; inset: 0; }
 .label {
@@ -229,6 +231,7 @@ html, body {
 .touch { position: absolute; inset: 0; pointer-events: none; }
 .stick { position: absolute; left: 7vw; bottom: 9vh; width: 120px; height: 120px; border-radius: 50%; border: 1px solid rgba(255,255,255,.25); background: rgba(0,0,0,.12); }
 .stick .knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: rgba(236,228,210,.35); }
+.tbtn.on { border-color: var(--gold-hi); color: var(--gold-hi); }
 .tbtn { pointer-events: auto; position: absolute; right: 6vw; width: 56px; height: 56px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--stone); font-size: 14px; }
 #t-act { bottom: 20vh; }
 #t-run { bottom: 9vh; right: 16vw; }

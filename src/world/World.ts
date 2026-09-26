@@ -60,6 +60,6 @@ export class World {
     this.cathedral = buildCathedral(app);
     app.scene.add(this.cathedral.group);
     this.colliders.push(this.cathedral.collision);
-    if (import.meta.env.DEV) console.log("cathedral", JSON.stringify(this.cathedral.report));
+    if (import.meta.env.DEV) console.log("cathedral", JSON.stringify(this.cathedral.report), JSON.stringify(this.cathedral.drawn));
   }
 }

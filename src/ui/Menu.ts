@@ -37,7 +37,6 @@ export class Menu {
   private el = $("menu");
   open = false;
   onClose: (() => void) | null = null;
-  onToggleSound: ((on: boolean) => void) | null = null;
   onLabels: ((on: boolean) => void) | null = null;
 
   constructor(private app: App, private game: Game) {
@@ -111,8 +110,6 @@ export class Menu {
     });
     const labels = $<HTMLInputElement>("labels-on");
     labels.addEventListener("change", () => this.onLabels?.(labels.checked));
-    const sound = $<HTMLInputElement>("sound-on");
-    sound.addEventListener("change", () => this.onToggleSound?.(sound.checked));
     // close on Escape while open is handled by the game (pointer lock)
   }
 

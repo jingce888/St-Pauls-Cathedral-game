@@ -37,7 +37,7 @@ export class Hud {
     for (let t = -360; t <= 720; t += 15) {
       const d = ((t % 360) + 360) % 360;
       const x = t * this.pxPerDeg;
-      if (names[d] !== undefined) parts.push(`<span class="card" style="left:${x}px">${names[d]}</span>`);
+      if (names[d] !== undefined) parts.push(`<span class="cardinal" style="left:${x}px">${names[d]}</span>`);
       else parts.push(`<span style="left:${x}px">${d}</span>`);
       for (let k = 1; k < 3; k++) parts.push(`<i style="left:${x + k * 5 * this.pxPerDeg}px"></i>`);
     }
@@ -56,6 +56,11 @@ export class Hud {
 
   show(on: boolean) {
     this.root.classList.toggle("hidden", !on);
+  }
+
+  /** Photo mode: everything but the view (and the labels) fades out. */
+  photo(on: boolean) {
+    this.root.classList.toggle("photo", on);
   }
 
   toast(title: string, sub: string) {

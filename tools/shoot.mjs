@@ -87,6 +87,7 @@ export const POSES = {
   aisleNorth: { p: [-60, 4.2, -13], t: [-66, 5, -17.15], adapt: 5 },
   monument: { p: [-40, 4.2, -12], t: [-44, 5.5, -17.15], adapt: 5 },
   nwArch: { p: [-3, 6, -3], t: [-12, 16, -12], adapt: 5 },
+  pedCorner: { p: [-96, 33, 14], t: [-86, 33.5, 5] },
   // along the route (indices into world.cathedral.stairs.route, counted from the end if negative)
   stair1Top: { route: [228, 238], adapt: 10 },
   catwalk: { route: [-33, -27], adapt: 8 },

@@ -759,7 +759,7 @@ export function cartouche(w: number, h: number, res = 0.03, seed = 1): Relief {
 }
 
 /** Keystone cherub (instanced): head radius 0.2 m, wings ~1.2 m across; origin at the chin line. */
-export function keystoneCherub(res = 0.012): Relief {
+export function keystoneCherub(res = 0.016): Relief {
   const s = 0.2;
   const r = new Relief(1.3, 0.8, res);
   r.at(0.65, 0.4, { s, depth: 0.7 }, () => cherubHead(r, "side"));
