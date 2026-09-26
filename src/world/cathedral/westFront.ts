@@ -7,6 +7,8 @@ import { rng } from "../../core/rng";
 import { FLOOR, PLAN, TOWER, WEST } from "../dims";
 import { balustrade, column, faceYaw, pilaster, slab, statue, type Ctx } from "./kit";
 import { H, pediment } from "./walls";
+import { placeRelief } from "./reliefs";
+import { conversionOfPaul, paulPreaching } from "./sculpture";
 
 const DEG = Math.PI / 180;
 
@@ -85,15 +87,13 @@ export function buildWestFront(ctx: Ctx) {
     const surf = planeSurface([recessX, 6.3], [0, -1], wallN);
     const L = 12.6;
     const door: Opening = { s0: L / 2 - 2.15, s1: L / 2 + 2.15, y0: FLOOR, y1: FLOOR + 8.9, head: "flat" };
-    const lun: Opening = { s0: L / 2 - 1.6, s1: L / 2 + 1.6, y0: FLOOR + 9.8, y1: FLOOR + 10.4, head: "round" };
-    stone.withPaint({ joint: JOINT.ashlar, cav: 0.85 }, () => stripPanel(stone, surf, 0, L, FLOOR, H.lowerEnt, [door, lun], 1.2));
+    stone.withPaint({ joint: JOINT.ashlar, cav: 0.85 }, () => stripPanel(stone, surf, 0, L, FLOOR, H.lowerEnt, [door], 1.2));
     doorway(ctx, surf, door, 1.6, true);
-    windowIn(ctx, surf, lun);
     // floor of the doorway (between the porch and the nave)
     ctx.g("marble").box(recessX - 0.05, FLOOR - 0.3, -2.2, recessX + 1.65, FLOOR, 2.2, "ny");
     col.box(recessX - 0.05, -3, -2.2, recessX + 1.65, FLOOR, 2.2);
-    // relief panel over the door (the Conversion of St Paul in reality is in the pediment; here a carved tablet)
-    slab(stone, surf, L / 2 - 2.6, L / 2 + 2.6, FLOOR + 9.0, FLOOR + 9.55, 0, -0.35, 0.05);
+    // relief panel over the door: St Paul preaching to the Bereans (Francis Bird)
+    placeRelief(ctx, paulPreaching(7.0, 2.4), surf.point(L / 2, FLOOR + 10.15, -0.005), wallN);
   }
   // portico ceiling (coffered) between the entablature and the walls
   ctx.g("stone").withPaint({ joint: JOINT.none, cav: 0.7 }, () => {
@@ -153,7 +153,11 @@ export function buildWestFront(ctx: Ctx) {
     ctx.g("lead").poly([[x0, H.upperEnt + 0.2, -hw], [x0, top, 0], [x1, top, 0], [x1, H.upperEnt + 0.2, -hw]]);
     ctx.g("lead").poly([[x1, H.upperEnt + 0.2, hw], [x1, top, 0], [x0, top, 0], [x0, H.upperEnt + 0.2, hw]]);
   });
-  tympanumRelief(ctx, PLAN.porticoFront + 0.1, H.upperEnt + 0.15, WEST.pedimentW - 3, WEST.pedimentApex - H.upperEnt - 0.7);
+  // tympanum: the Conversion of St Paul (Francis Bird, 1706)
+  {
+    const half = WEST.pedimentW / 2, ph = WEST.pedimentApex - H.upperEnt, ch = Math.max(0.35, ph * 0.14);
+    placeRelief(ctx, conversionOfPaul(half - ch, ph - ch * 0.9 - 0.05), pedSurf.point(half, H.upperEnt + 0.05, -0.01), wallN);
+  }
   // St Paul on the apex, St Peter and St James at the ends
   stone.box(-86.4, WEST.pedimentApex - 0.1, -1.0, -84.4, WEST.pedimentApex + 0.6, 1.0);
   statue(ctx, [-85.4, WEST.pedimentApex + 0.6, 0], -Math.PI / 2, WEST.statueTop - WEST.pedimentApex - 0.6, 0);
@@ -211,32 +215,6 @@ function windowIn(ctx: Ctx, surf: Surface, o: Opening) {
   stone.withPaint({ joint: JOINT.blocks, cav: 0.7 }, () => revealOnSurface(stone, surf, outline, 0.7));
   ctx.g("glass").withPaint({ cav: 1 }, () => fillOnSurface(ctx.g("glass"), surf, outline, 0.7));
   stone.withPaint({ joint: JOINT.none }, () => sweepOnSurface(stone, surf, new P(0, 0).to(0, 0.1).to(0.28, 0.1).to(0.28, 0).build(), outline.slice(1).concat([outline[0]]), false, { outwardFrom: [(o.s0 + o.s1) / 2, (o.y0 + o.y1) / 2] }));
-}
-
-/**
- * Low-relief figures in the west pediment (Francis Bird's Conversion of St Paul): a horse and
- * riders, the fallen Saul, rays from above — suggested with rounded masses.
- */
-function tympanumRelief(ctx: Ctx, x: number, y0: number, w: number, h: number) {
-  const b = ctx.g("stone");
-  const r = rng(77);
-  b.withPaint({ joint: JOINT.none, cav: 0.85 }, () => {
-    for (let i = 0; i < 26; i++) {
-      const u = (r() - 0.5) * 0.92;
-      const maxH = h * (1 - Math.abs(u) * 2) * 0.85;
-      if (maxH < 0.4) continue;
-      const hh = Math.min(maxH, 0.6 + r() * 1.6);
-      const z = u * w;
-      const yy = y0 + r() * Math.max(0, maxH - hh);
-      const sw = 0.25 + r() * 0.35;
-      b.at(x, yy, z, -Math.PI / 2, () => b.lathe([[0.001, 0], [sw, hh * 0.15], [sw * 0.9, hh * 0.6], [sw * 0.55, hh * 0.85], [0.001, hh]], 7, { smooth: true }), 1);
-    }
-    // rays of light from the apex
-    for (let k = -3; k <= 3; k++) {
-      const a = (k / 3) * 0.9;
-      b.at(x - 0.05, y0 + h * 0.8, 0, 0, () => b.box(-0.05, -Math.cos(a) * 1.5, Math.sin(a) * 1.5 - 0.04, 0.0, 0, Math.sin(a) * 1.5 + 0.04));
-    }
-  });
 }
 
 /** One west tower above the main cornice. s = -1 north (void oculi), +1 south (clock). */

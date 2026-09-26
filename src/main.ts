@@ -78,6 +78,7 @@ window.__stpauls = {
       westSideNorth: [g(-120, -6.3), g(-99, -6.3), g(-87, -6.3, 2.5), g(-84.1, -6.3, 2.5), g(-84.1, -9.9, 2.5), g(-82, -9.9, 2.5), g(-76, -9.9, 2.5), g(-72, -12, 2.5)],
       westSideSouth: [g(-120, 6.3), g(-99, 6.3), g(-87, 6.3, 2.5), g(-84.1, 6.3, 2.5), g(-84.1, 9.9, 2.5), g(-82, 9.9, 2.5), g(-76, 9.9, 2.5), g(-72, 12, 2.5)],
       northTransept: [g(0, -62), g(0, -50), g(0, -44, 2.5), g(0, -38, 2.5), g(0, -34, 2.5), g(0, -28, 2.5)],
+      quire: [g(-8, 0, 2.5), g(10, 0, 2.5), g(24, 0, 2.5), g(40, 0, 2.5), g(54.5, 0, 2.5), g(56.6, 3.5, 3.01), g(60.5, 4.2, 3.01), g(62.5, 0, 3.01)],
       southTransept: [g(14.2, 50), g(14.2, 45), g(14.2, 38.8, 1.3), g(13.2, 37.7, 1.3), g(11.2, 37.9, 1.3), g(10.4, 39.5, 1.3), g(8.6, 43.6, 1.3), g(3.5, 45.2, 1.3), g(0, 44.6, 1.8), g(0, 42.4, 2.5), g(0, 38, 2.5), g(0, 34, 2.5), g(0, 28, 2.5)],
     };
     // a lap of each gallery
@@ -88,7 +89,7 @@ window.__stpauls = {
     const out: Record<string, unknown> = {};
     for (const [name, pts] of Object.entries(paths)) {
       const [x, y0, z] = pts[0];
-      game.player.teleport(x, z, 0, 0, name.endsWith("Lap") ? y0 : undefined);
+      game.player.teleport(x, z, 0, 0, name.endsWith("Lap") || name === "quire" ? y0 : undefined);
       const r = game.followPath(pts, 120);
       out[name] = { ok: r.reached === r.total && !r.stuck && r.rescues === 0 && Math.abs(r.at[1] - pts[pts.length - 1][1]) < 0.05, ...r };
     }

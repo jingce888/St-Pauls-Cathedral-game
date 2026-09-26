@@ -5,6 +5,8 @@ import { P, cornice, entablature, pedestalBase, pedestalCap, plinth } from "../.
 import type { V2 } from "../../core/math";
 import { ELEV, FLOOR, PLAN } from "../dims";
 import { balustrade, faceYaw, pilasterGroup, slab, statue, type Ctx } from "./kit";
+import { placeRelief } from "./reliefs";
+import { cartouche, phoenix, royalArms } from "./sculpture";
 import type { Face } from "./plan";
 
 /** Heights of the wall system (world y). */
@@ -137,6 +139,9 @@ export function buildWalls(ctx: Ctx, faces: Face[]) {
     }
     for (const o of op.niches) niche(ctx, surf, o);
     if (op.door) {
+      // cartouche over the transept door, under the portico
+      const dc = (op.door.s0 + op.door.s1) / 2, side = Math.sign(surf.normal(dc)[2]);
+      placeRelief(ctx, cartouche(4.4, 4.6, 0.028, side > 0 ? 2 : 1), surf.point(dc, op.door.y1 + 1.0, -0.005), [0, side]);
       const outline = openingOutline(op.door, 4);
       stone.withPaint({ joint: JOINT.blocks, cav: 0.6 }, () => revealOnSurface(stone, surf, outline, 1.2));
       // the oak leaves stand open, turned back against the inside of the wall
@@ -149,10 +154,13 @@ export function buildWalls(ctx: Ctx, faces: Face[]) {
       stone.withPaint({ joint: JOINT.none }, () => sweepOnSurface(stone, surf, surround(0.45, 0.2), outline.slice(1).concat([outline[0]]), false, { outwardFrom: [(op.door!.s0 + op.door!.s1) / 2, op.door!.y0] }));
     }
 
-    // pilasters on piers
+    // pilasters on piers, with carved drops of fruit and flowers hanging between a pair
     if (run.kind === "P" || run.kind === "Q") {
       pilasterGroup(ctx, surf, L, H.lowerBase, H.lowerTop, LOWER_W, 0.3, "capCflat");
       pilasterGroup(ctx, surf, L, H.upperBase, H.upperTop, UPPER_W, 0.25, "capXflat");
+      const yaw = faceYaw(surf.normal(L / 2));
+      if (L >= 2 * LOWER_W + 0.5) ctx.inst.add("dropL", surf.point(L / 2, H.lowerTop - LOWER_W * 1.17 - 0.12, -0.005), yaw);
+      if (L >= 2 * UPPER_W + 0.5) ctx.inst.add("dropU", surf.point(L / 2, H.upperTop - UPPER_W * 1.17 - 0.12, -0.005), yaw);
     }
     // frieze festoons between the capitals over window bays
     if ((run.kind === "B" || run.kind === "C") && L > 4) {
@@ -190,11 +198,13 @@ function windowDressing(ctx: Ctx, surf: Surface, o: Opening, storey: "lower" | "
   const path = outline.slice(1).concat([outline[0]]);
   stone.withPaint({ joint: JOINT.none, cav: 1 }, () => sweepOnSurface(stone, surf, surround(storey === "lower" ? 0.42 : 0.3, 0.16), path, false, { outwardFrom: [cs, (o.y0 + o.y1) / 2] }));
   const crown = o.y1 + w / 2;
-  // keystone (cherub head in reality)
+  // keystone carved with a winged cherub head
+  const lower = storey === "lower";
   stone.withPaint({ joint: JOINT.none }, () => {
-    const kw = storey === "lower" ? 0.55 : 0.4;
-    slab(stone, surf, cs - kw / 2, cs + kw / 2, crown - 0.15, crown + (storey === "lower" ? 0.75 : 0.5), 0.0, -0.3);
+    const kw = lower ? 0.5 : 0.38;
+    slab(stone, surf, cs - kw / 2, cs + kw / 2, crown - 0.15, crown + (lower ? 0.62 : 0.45), 0.0, -0.13);
   });
+  ctx.inst.add("cherub", surf.point(cs, crown + (lower ? 0.2 : 0.14), -0.17), faceYaw(surf.normal(cs)), lower ? 1.3 : 0.95);
   // sill ledge on consoles
   stone.withPaint({ joint: JOINT.blocks }, () => slab(stone, surf, o.s0 - 0.55, o.s1 + 0.55, o.y0 - 0.26, o.y0, 0, -0.26, 0.04));
   if (storey === "lower") {
@@ -376,7 +386,9 @@ function balustradeLoop(ctx: Ctx, faces: Face[]) {
     const zF = side * 37.75;
     const surf = planeSurface([side < 0 ? -9.35 : 9.35, zF], [side < 0 ? 1 : -1, 0], [0, side]);
     pediment(ctx, surf, 9.35, H.upperEnt, 18.7, 4.3, 0.95);
-    transeptRelief(ctx, side, zF, H.upperEnt + 0.2);
+    // tympanum sculpture: the royal arms (north), the phoenix and RESURGAM (south)
+    const tymp = side < 0 ? royalArms(8.748, 3.708) : phoenix(8.748, 3.708);
+    placeRelief(ctx, tymp, [0, H.upperEnt + 0.05, zF + side * 0.01], [0, side]);
     for (const x of [-15.7, 15.7]) statue(ctx, [x, H.top, side * 37.55], side < 0 ? Math.PI : 0, 3.2, v++);
     const stone = ctx.g("stone");
     stone.box(-0.9, H.upperEnt + 4.2, zF - 0.9, 0.9, H.upperEnt + 4.9, zF + 0.9);
@@ -387,37 +399,4 @@ function balustradeLoop(ctx: Ctx, faces: Face[]) {
     }
   }
   void THREE;
-}
-
-/**
- * Tympanum sculpture: the royal arms supported by angels (north, by Grinling Gibbons) and the
- * phoenix rising from the flames with RESURGAM (south, by Caius Gabriel Cibber).
- */
-function transeptRelief(ctx: Ctx, side: number, zF: number, y0: number) {
-  const b = ctx.g("stone");
-  const d = side * 0.1;
-  b.withPaint({ joint: JOINT.none, cav: 0.85 }, () => {
-    if (side < 0) {
-      // shield with crown, two angels with palm branches
-      b.at(0, y0 + 0.2, zF + d, 0, () => {
-        b.box(-0.9, 0.2, -0.25, 0.9, 1.9, 0.0);
-        b.lathe([[0.001, 1.9], [0.55, 2.05], [0.5, 2.45], [0.001, 2.6]], 8, { smooth: true });
-      });
-      for (const sx of [-1, 1]) {
-        b.at(sx * 2.6, y0, zF + d, 0, () => b.lathe([[0.001, 0], [0.45, 0.4], [0.5, 1.1], [0.35, 1.6], [0.2, 1.9], [0.001, 2.1]], 8, { smooth: true }), 1);
-        b.at(sx * 3.4, y0 + 1.2, zF + d, 0, () => b.box(-0.9, -0.05, -0.15, 0.9, 0.35, 0.05));
-      }
-    } else {
-      // phoenix with spread wings over flames, and the RESURGAM tablet
-      b.at(0, y0 + 0.3, zF + d, 0, () => {
-        b.lathe([[0.001, 0.4], [0.35, 0.7], [0.3, 1.3], [0.15, 1.9], [0.001, 2.1]], 8, { smooth: true });
-        b.box(-2.6, 1.2, -0.12, -0.3, 1.5, 0.12);
-        b.box(0.3, 1.2, -0.12, 2.6, 1.5, 0.12);
-        b.box(-2.2, 1.5, -0.1, -0.5, 1.75, 0.1);
-        b.box(0.5, 1.5, -0.1, 2.2, 1.75, 0.1);
-        for (let k = -3; k <= 3; k++) b.lathe([[0.001, 0], [0.18, 0.1], [0.12, 0.35], [0.001, 0.55 + 0.1 * (3 - Math.abs(k))]].map(([r, y]) => [r, y] as V2), 6, { smooth: true });
-      });
-      b.box(-1.6, y0, zF + d - 0.1, 1.6, y0 + 0.35, zF + d + 0.1);
-    }
-  });
 }

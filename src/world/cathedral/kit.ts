@@ -5,6 +5,7 @@ import type { V2, V3 } from "../../core/math";
 import { atticBaseLathe, atticBaseSweep } from "../../geo/profiles";
 import type { Surface } from "../../geo/surface";
 import { balusterGeo, capitalGeo, festoonGeo, modillionGeo, pineappleGeo, statueGeo, urnGeo } from "./protos";
+import { bandGeo, cherubGeo, dropGeo, fameGeo } from "./reliefs";
 
 /** Instanced prototypes: one InstancedMesh per prototype and material. */
 export class Instances {
@@ -54,6 +55,8 @@ export class Ctx {
   readonly col = new GeoBuilder();
   /** Angles (radians, from +x towards +z) of the doors from the Whispering Gallery into the stairs. */
   readonly doors: number[] = [];
+  /** Ready-made objects (textured paintings and mosaics) added to the building as they are. */
+  readonly extras: THREE.Object3D[] = [];
   /** Baked light per material (second paint channel), applied when the meshes are built. */
   readonly bake = new Map<MatKey, (x: number, y: number, z: number) => number>();
 
@@ -70,6 +73,20 @@ export class Ctx {
     I.define("festoon", () => festoonGeo(), "stone", false);
     I.define("pineapple", () => pineappleGeo(), "gold");
     for (let v = 0; v < 4; v++) I.define(`statue${v}`, () => statueGeo(v), "stone");
+    I.define("cherub", cherubGeo, "stone", false);
+    I.define("cherubInt", cherubGeo, "stoneInt", false);
+    I.define("dropL", () => dropGeo(0.52, 3.0, 3), "stone", false);
+    I.define("dropU", () => dropGeo(0.44, 2.6, 5), "stone", false);
+    I.define("dropInt", () => dropGeo(0.5, 2.4, 7), "stoneInt", false);
+    I.define("cherubGold", cherubGeo, "goldInt", false);
+    I.define("urnGold", () => urnGeo(), "goldInt", false);
+    I.define("capXgold", () => capitalGeo({ composite: true }), "goldInt");
+    I.define("statueGold", () => statueGeo(0), "goldInt");
+    I.define("shade", () => bandGeo(0.8, 0.55, 11), "goldInt", false);
+    I.define("crest", () => bandGeo(1.8, 0.5, 13), "wood", false);
+    I.define("festoonInt", () => festoonGeo(), "stoneInt", false);
+    I.define("fameR", () => fameGeo(false), "stoneInt", false);
+    I.define("fameL", () => fameGeo(true), "stoneInt", false);
   }
 
   g(m: MatKey = "stone"): GeoBuilder {
@@ -93,6 +110,7 @@ export class Ctx {
       report[m] = b.triangles;
     }
     report.instances = this.inst.build(this.mats, parent);
+    for (const o of this.extras) parent.add(o);
     return report;
   }
 }

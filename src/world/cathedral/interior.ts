@@ -3,7 +3,7 @@ import { fillOnSurface, openingOutline, planeSurface, revealOnSurface, stripPane
 import { P, cornice, entablature } from "../../geo/profiles";
 import type { V2, V3 } from "../../core/math";
 import { DOME, FLOOR } from "../dims";
-import { pilaster, type Ctx } from "./kit";
+import { faceYaw, pilaster, type Ctx } from "./kit";
 import { planLoop } from "./plan";
 import { groupRuns, runOpenings } from "./walls";
 import { coneR } from "./stairs";
@@ -50,6 +50,12 @@ export const INT = {
   drumTopR: DOME.innerR + 0.3,
 } as const;
 
+/** The mosaic panels above the eight arches of the crossing (filled with pictures in paintings.ts). */
+export const SPANDRELS: { surf: Surface; s0: number; s1: number; y0: number; y1: number; axis: boolean; midA: number }[] = [];
+
+/** Clear stretches of the aisle walls (centre, inward normal) for monuments and paintings. */
+export const AISLE_SPOTS: { x: number; z: number; n: V2 }[] = [];
+
 /** Centre (|z|) of the two side doors in the west front. */
 export const WEST_SIDE_DOOR = 9.875;
 
@@ -70,8 +76,8 @@ function wallSurf(a: V2, b: V2): { surf: Surface; len: number; dir: V2; inw: V2 
   return { surf: planeSurface(a, dir, inw), len, dir, inw };
 }
 
-/** A shallow "saucer" vault over a rectangle, seen from below. */
-function saucer(b: GeoBuilder, x0: number, x1: number, z0: number, z1: number, ys: number, rise: number, n = 12) {
+/** A shallow "saucer" vault over a rectangle, seen from below (uv: physical, or 0..1 across it). */
+export function saucer(b: GeoBuilder, x0: number, x1: number, z0: number, z1: number, ys: number, rise: number, n = 12, unitUv = false) {
   const hx = (x1 - x0) / 2, hz = (z1 - z0) / 2, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
   const idx: number[][] = [];
   for (let j = 0; j <= n; j++) {
@@ -83,7 +89,7 @@ function saucer(b: GeoBuilder, x0: number, x1: number, z0: number, z1: number, y
       // downward normal of y = f(x, z): (fx, -1, fz)
       const fx = (-rise * u) / hx, fz = (-rise * v) / hz;
       const l = Math.hypot(fx, 1, fz);
-      idx[j].push(b.v(x, y, z, fx / l, -1 / l, fz / l, x, z));
+      idx[j].push(b.v(x, y, z, fx / l, -1 / l, fz / l, unitUv ? i / n : x, unitUv ? j / n : z));
     }
   }
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) b.orientQuad(idx[j][i], idx[j][i + 1], idx[j + 1][i + 1], idx[j + 1][i]);
@@ -113,6 +119,8 @@ function band(b: GeoBuilder, at: number, s0: number, s1: number, ys: number, ris
 
 export function buildInterior(ctx: Ctx) {
   const st = ctx.g("stoneInt");
+  AISLE_SPOTS.length = 0;
+  SPANDRELS.length = 0;
   const col = ctx.col;
 
   // ------------------------------------------------------------------------ floor
@@ -148,7 +156,7 @@ export function buildInterior(ctx: Ctx) {
     b.withPaint({ joint: JOINT.none, cav: 0.9 }, () => saucer(b, Math.min(x0, x1), Math.max(x0, x1), Math.min(z0, z1), Math.max(z0, z1), INT.vaultSpring, INT.vaultRise));
   };
   for (let i = 0; i < NAVE_X.length - 1; i++) vault(NAVE_X[i], NAVE_X[i + 1], -INT.zV, INT.zV, "stoneInt");
-  for (let i = 0; i < CHOIR_X.length - 1; i++) vault(CHOIR_X[i], CHOIR_X[i + 1], -INT.zV, INT.zV, "mosaic");
+  // (the quire saucers carry Richmond's mosaics: see paintings.ts)
   for (const t of [-1, 1]) vault(-INT.zV, INT.zV, t * TRANSEPT_Z[0], t * TRANSEPT_Z[1], "stoneInt");
   st.withPaint({ joint: JOINT.blocks, cav: 0.8 }, () => {
     for (const x of [...NAVE_X.slice(1, -1), ...CHOIR_X.slice(1, -1)]) band(st, x, -INT.zV, INT.zV, INT.vaultSpring, INT.vaultRise, 1.5, 0.45, true);
@@ -166,17 +174,7 @@ export function buildInterior(ctx: Ctx) {
       aisle(s * INT.zP, s * INT.zA, t * 26.2, t * INT.zT);
     }
   }
-  // apse semi-dome with mosaic
-  {
-    const prof: V2[] = [];
-    const ys = INT.vaultSpring - 3.0;
-    for (let i = 0; i <= 12; i++) {
-      const t = (i / 12) * (Math.PI / 2);
-      prof.push([INT.apseR * Math.cos(t), ys + INT.apseR * 0.95 * Math.sin(t)]);
-    }
-    const m = ctx.g("mosaic");
-    m.withPaint({ joint: 0, cav: 0.9 }, () => m.at(INT.xE, 0, 0, 0, () => m.lathe(prof, 24, { a0: -Math.PI / 2, a1: Math.PI / 2, inside: true, smooth: true })));
-  }
+  // (the apse semi-dome with its mosaic of Christ in Majesty: see paintings.ts)
 
   // ------------------------------------------------------------------------ the crossing
   crossing(ctx);
@@ -273,6 +271,19 @@ function interiorShell(ctx: Ctx, outline: V2[]) {
         st.sweep(new P(0.12, F).up(0.45).to(0.06, F + 0.55).to(0, F + 0.6).build(), [[p0[0], p0[2]], [p1[0], p1[2]]], false, { flip: true });
       }
     });
+    // clear stretches of the aisle walls, between the windows, for monuments
+    if (Math.abs(Math.abs(a[1]) - INT.zA) < 1e-6 && Math.abs(a[1] - b[1]) < 1e-6 && len > 5) {
+      const busy = openings.map((o) => [o.s0 - 1.35, o.s1 + 1.35]);
+      let last = -Infinity;
+      for (let sc = 1.6; sc <= len - 1.6; sc += 0.25) {
+        if (busy.some(([p, q]) => sc > p && sc < q) || sc - last < 5.5) continue;
+        const pt = surf.point(sc, 0);
+        // not in the crossing's corner bays next to the transepts
+        if (Math.abs(pt[0]) < INT.zA + 2.5) continue;
+        AISLE_SPOTS.push({ x: pt[0], z: pt[2], n: inw });
+        last = sc;
+      }
+    }
     // collision: the wall up to head height, with the doors left open
     const colOps = doors.map((d) => d.o);
     col.withPaint({}, () => stripPanel(col, surf, 0, len, F - 0.5, F + 4, colOps, 4));
@@ -312,7 +323,7 @@ function arcade(ctx: Ctx, a: V2, b: V2, piers: number[]) {
     ops.push({ s0, s1, y0: F - 0.2, y1: INT.arcSpring, head: "segment", rise: INT.arcCrown - INT.arcSpring });
   }
   st.withPaint({ joint: JOINT.ashlar, cav: 0.95 }, () => {
-    stripPanel(st, vessel, 0, L, F - 0.05, INT.entBot, ops, 2.0);
+    stripPanel(st, vessel, 0, L, F - 0.05, INT.entTop - 0.02, ops, 2.0);
     stripPanel(st, aisle, 0, L, F - 0.05, INT.arcCrown + 0.4, ops, 2.0);
   });
   for (const o of ops) {
@@ -321,10 +332,31 @@ function arcade(ctx: Ctx, a: V2, b: V2, piers: number[]) {
     // archivolt
     const arc = outl.slice(2, -1);
     st.withPaint({ joint: JOINT.none }, () => sweepOnSurface(st, vessel, new P(0, 0).to(0, 0.1).to(0.12, 0.1).to(0.12, 0.3).to(0.2, 0.3).to(0.2, 0).build(), arc, false, { outwardFrom: [(o.s0 + o.s1) / 2, INT.arcSpring] }));
-    // keystone
+    // keystone carved with a cherub head
     const ks = (o.s0 + o.s1) / 2;
     const kp = vessel.point(ks, INT.arcCrown - 0.1, -0.02);
-    st.withPaint({ joint: JOINT.none }, () => st.at(kp[0], 0, kp[2], alongX ? (side > 0 ? Math.PI : 0) : (side > 0 ? -Math.PI / 2 : Math.PI / 2), () => st.box(-0.35, INT.arcCrown - 0.45, 0, 0.35, INT.arcCrown + 0.55, 0.22, "nz")));
+    st.withPaint({ joint: JOINT.none }, () => st.at(kp[0], 0, kp[2], alongX ? (side > 0 ? Math.PI : 0) : (side > 0 ? -Math.PI / 2 : Math.PI / 2), () => st.box(-0.3, INT.arcCrown - 0.4, 0, 0.3, INT.arcCrown + 0.45, 0.16, "nz")));
+    const nv = vessel.normal(ks);
+    ctx.inst.add("cherubInt", vessel.point(ks, INT.arcCrown + 0.02, -0.2), faceYaw(nv), 0.9);
+    // a carved swag in the frieze over the arch
+    ctx.inst.add("festoonInt", vessel.point(ks, INT.entBot + 1.3, -0.06), faceYaw(nv), [Math.min(3.2, o.s1 - o.s0 - 2.5), 1.3, 1.2]);
+  }
+  // reclining Fames in the spandrels beside each pier (arches of the standard span only)
+  const nv = vessel.normal(0);
+  const rightIsPlus = alongX ? nv[2] > 0 : nv[0] < 0; // is the viewer's right towards +s?
+  for (const p of piers) {
+    for (const o of ops) {
+      const c = (o.s0 + o.s1) / 2, half = (o.s1 - o.s0) / 2;
+      if (Math.abs(half - 3.75) > 0.06) continue;
+      const pierS = p - lo;
+      if (Math.abs(Math.abs(pierS - c) - (half + PIER_HALF)) > 0.05) continue;
+      const pierPlus = pierS > c;
+      const R = (half * half + 3.7 * 3.7) / (2 * 3.7);
+      const yc = INT.arcSpring + 3.7 - R;
+      ctx.inst.add(pierPlus === rightIsPlus ? "fameR" : "fameL", vessel.point(c, yc, -0.005), faceYaw(nv));
+    }
+    // a cherub in the frieze over the pilaster
+    ctx.inst.add("cherubInt", vessel.point(p - lo, INT.entBot + 1.06, -0.07), faceYaw(nv), 0.75);
   }
   // giant pilasters on the vessel face of each pier
   for (const p of piers) pilaster(ctx, vessel, p - lo, F, INT.entBot, 1.45, 0.22, "capXflat");
@@ -337,7 +369,8 @@ function arcade(ctx: Ctx, a: V2, b: V2, piers: number[]) {
   // entablature on the vessel face
   const e0 = vessel.point(0, 0), e1 = vessel.point(L, 0);
   const path: V2[] = [[e0[0], e0[2]], [e1[0], e1[2]]];
-  st.withPaint({ joint: JOINT.blocks, cav: 0.9 }, () => st.sweep(entablature(INT.entTop - INT.entBot, INT.entBot, 0.75, { frieze: 0.3 }), path, false, { flip: alongX ? side > 0 : side < 0 }));
+  // (the sweep's outward side is to the right of the path: towards the vessel)
+  st.withPaint({ joint: JOINT.blocks, cav: 0.9 }, () => st.sweep(entablature(INT.entTop - INT.entBot, INT.entBot, 0.75, { frieze: 0.3 }), path, false, { flip: alongX ? side < 0 : side > 0 }));
   // clerestory wall with windows up to the vault
   const cler = make(INT.zV, -side);
   const wins: Opening[] = [];
@@ -437,15 +470,18 @@ function crossing(ctx: Ctx) {
     // gold mosaic spandrels above the arch
     const m = ctx.g("mosaic");
     const crown = INT.crossSpring + half;
-    if (top - crown > 1.5) {
-      m.withPaint({ joint: 0, cav: 1 }, () => fillOnSurface(m, surf, [[0.4, crown + 0.6], [L - 0.4, crown + 0.6], [L - 0.4, top - 0.5], [0.4, top - 0.5]], -0.01));
-    }
+    ctx.inst.add("cherubInt", surf.point(L / 2, crown + 0.2, -0.42), faceYaw(nrm), 1.5);
+    if (top - crown > 1.5) SPANDRELS.push({ surf, s0: 0.4, s1: L - 0.4, y0: crown + 0.6, y1: top - 0.5, axis, midA });
+    void m;
     // back of the arch: close the opening above the lower vaults behind it
     const back = planeSurface([p[0] - nrm[0] * depth, p[1] - nrm[1] * depth], dir, nrm);
     const floorBehind = axis ? INT.vaultSpring + INT.vaultRise : INT.aisleSpring + INT.aisleRise;
     const clip = outl.filter((pt) => pt[1] > floorBehind - 0.2);
     if (clip.length > 2) {
-      const poly: V2[] = [[L / 2 - half, floorBehind - 0.2], ...clip.filter((pt) => pt[0] > L / 2 - half + 0.01 && pt[0] < L / 2 + half - 0.01), [L / 2 + half, floorBehind - 0.2]];
+      // bottom edge left to right, then the arch back from right to left (the outline runs that way)
+      const arc = clip.filter((pt) => pt[0] > L / 2 - half + 0.01 && pt[0] < L / 2 + half - 0.01);
+      if (arc.length > 1 && arc[0][0] < arc[arc.length - 1][0]) arc.reverse();
+      const poly: V2[] = [[L / 2 - half, floorBehind - 0.2], [L / 2 + half, floorBehind - 0.2], [L / 2 + half, INT.crossSpring], ...arc, [L / 2 - half, INT.crossSpring]];
       st.withPaint({ joint: JOINT.ashlar, cav: 0.8 }, () => fillOnSurface(st, back, poly, 0));
     } else if (axis) {
       // the vessel's vault end above the arch: fill between the arch and the vault crown line

@@ -8,6 +8,8 @@ import { buildPorticoes } from "./porticoes";
 import { buildDome } from "./dome";
 import { buildRoofs } from "./roofs";
 import { buildInterior } from "./interior";
+import { buildFurnishings } from "./furnishings";
+import { buildPaintings } from "./paintings";
 import { buildStairs, type StairInfo } from "./stairs";
 import { FLOOR } from "../dims";
 import { WEST_SIDE_DOOR } from "./interior";
@@ -31,6 +33,8 @@ export function buildCathedral(app: App, parts: ((ctx: Ctx) => void)[] = []): Ca
   buildDome(ctx);
   const stairs = buildStairs(ctx);
   buildInterior(ctx);
+  buildFurnishings(ctx);
+  buildPaintings(ctx);
   // collision: the outer walls, except the west porch which leads to the great west door
   const col = ctx.col;
   const wallCol = (a: V2, b: V2, out: V2) => col.polyN([[a[0], -3, a[1]], [b[0], -3, b[1]], [b[0], FLOOR + 5, b[1]], [a[0], FLOOR + 5, a[1]]], [out[0], 0, out[1]]);

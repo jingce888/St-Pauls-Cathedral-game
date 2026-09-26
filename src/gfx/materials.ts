@@ -130,6 +130,8 @@ export interface SurfaceSpec {
   ambient?: string;
   /** Emissive addition, GLSL vec3 expression evaluated after lighting (radiance). */
   emissive?: string;
+  /** Indoors: how far reflections are turned to the warm grey of bounced light (metals keep their colour with a low value). */
+  specDesat?: number;
   /** Skip aerial perspective (interiors, tiny distances). */
   noAerial?: boolean;
   /** GLSL at file scope in the vertex shader (extra attributes / varyings). */
@@ -198,7 +200,7 @@ export function patchMaterial<T extends THREE.MeshStandardMaterial>(mat: T, spec
           reflectedLight.indirectDiffuse = mix(reflectedLight.indirectDiffuse, il * vec3(1.1, 1.0, 0.84), 0.8);
           reflectedLight.indirectSpecular *= ambK * 0.8;
           float sl = dot(reflectedLight.indirectSpecular, vec3(0.2126, 0.7152, 0.0722));
-          reflectedLight.indirectSpecular = mix(reflectedLight.indirectSpecular, sl * vec3(1.1, 1.0, 0.84), 0.8);`
+          reflectedLight.indirectSpecular = mix(reflectedLight.indirectSpecular, sl * vec3(1.1, 1.0, 0.84), ${(spec.specDesat ?? 0.8).toFixed(3)});`
             : "reflectedLight.indirectSpecular *= mix(ambK, 1.0, 0.25) * surfAO;"}
         }`,
       )
@@ -350,9 +352,26 @@ const GOLD_ALBEDO = /* glsl */ `
   surfMetal = 1.0;
   surfAO = mix(0.6, 1.0, vColor.b);
 `;
-export function makeGold() {
+export function makeGold(interior = false) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.25, metalness: 1 });
-  return patchMaterial(m, { key: "gold", albedo: GOLD_ALBEDO });
+  return patchMaterial(m, { key: interior ? "goldInt" : "gold", albedo: GOLD_ALBEDO, ambient: interior ? "uInteriorAmbient * 1.5" : undefined, specDesat: interior ? 0.0 : undefined });
+}
+
+/** Polished marble (monuments, the altar, the font): vein pattern from the noise. */
+export function makeMarble(color: THREE.ColorRepresentation, key: string, vein = 0.25) {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, color, roughness: 0.25 });
+  return patchMaterial(m, {
+    key,
+    albedo: `
+      vec3 p = vWorldPos * 1.7;
+      float n = texture2D(uNoise, p.xz * 0.21 + p.y * 0.13).r + 0.5 * texture2D(uNoise, p.zy * 0.37 + p.x * 0.11).g;
+      float v = smoothstep(0.02, 0.0, abs(fract(n * 3.0) - 0.5) - 0.47);
+      diffuseColor.rgb *= (0.94 + 0.08 * n) * (1.0 - ${vein.toFixed(3)} * v) * mix(0.6, 1.0, vColor.b);
+      surfRough = 0.18 + 0.12 * n;
+      surfAO = mix(0.5, 1.0, vColor.b);
+    `,
+    ambient: "uInteriorAmbient",
+  });
 }
 
 // ---------------------------------------------------------------------------------- iron
@@ -530,13 +549,17 @@ export function createMaterialSet() {
     stoneInt: makeStone({ interior: true, tint: 0xd8cfbc }),
     lead: makeLead(),
     gold: makeGold(),
+    goldInt: makeGold(true),
+    whiteMarble: makeMarble(0xe6e1d6, "whiteMarble", 0.22),
+    blackMarble: makeMarble(0x1a1817, "blackMarble", -0.8),
+    redMarble: makeMarble(0x6e2a22, "redMarble", 0.3),
     iron: makeIron(),
     glass: makeGlass(),
     paving: makePaving(),
     asphalt: makeAsphalt(),
     grass: makeGrass(),
     marble: makeMarbleFloor(),
-    wood: makePlain(0x3b2616, 0.62, 0, "wood", true),
+    wood: makePlain(0x5c3d22, 0.55, 0, "wood", true),
     darkStone: makeStone({ tint: 0x8c877d, key: "darkStone" }),
     brick: makePlain(0x7a3f2c, 0.9, 0, "brick", true),
     timber: makePlain(0x4a3522, 0.85, 0, "timber", true),
