@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { DOME, FLOOR } from "../world/dims";
-import { AISLE_SPOTS } from "../world/cathedral/interior";
-import { HUNG } from "../world/cathedral/paintings";
+import { HUNG, MONUMENTS } from "../world/cathedral/paintings";
+import { PHOTO_PLACES } from "../world/cathedral/photoReliefs";
 
 /**
  * Points of interest: standing near one (and, for things overhead, looking at it) offers an
@@ -163,9 +163,13 @@ function list(): Poi[] {
   if (all) return all;
   all = [...BASE];
   for (const h of HUNG) all.push({ id: h.id, x: h.x, y: F, z: h.z, r: 3.2, dy: 2, ...PAINTINGS[h.id] });
+  // the carvings made from photographs, from in front of their altars
+  for (const p of PHOTO_PLACES) {
+    const d = p.altar ? 3.2 : 6;
+    all.push({ id: p.id, x: p.x + p.n[0] * d, y: FLOOR, z: p.z + p.n[1] * d, r: p.altar ? 2.6 : 5, dy: 2, look: [p.x, p.y + 1.2, p.z], cone: 0.6, title: p.title, cn: p.cn, meta: p.meta, en: p.en, zh: p.zh });
+  }
   // one card for the memorials, near any of them
-  AISLE_SPOTS.forEach((s, i) => {
-    if (HUNG.some((h) => Math.hypot(h.x - s.x, h.z - s.z) < 2)) return;
+  MONUMENTS.forEach((s, i) => {
     all!.push({
       id: `memorial${i}`, x: s.x + s.n[0] * 1.6, y: F, z: s.z + s.n[1] * 1.6, r: 2.2, dy: 2,
       title: "Memorials", cn: "纪念碑", meta: "The aisles",

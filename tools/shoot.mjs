@@ -88,6 +88,12 @@ export const POSES = {
   monument: { p: [-40, 4.2, -12], t: [-44, 5.5, -17.15], adapt: 5 },
   nwArch: { p: [-3, 6, -3], t: [-12, 16, -12], adapt: 5 },
   pedCorner: { p: [-96, 33, 14], t: [-86, 33.5, 5] },
+  chGeorge: { p: [-72.3, 4.1, 14.3], t: [-77.4, 5.4, 14.3], adapt: 5 },
+  chGeorgeSide: { p: [-75.2, 4.4, 11.9], t: [-77.4, 5.0, 14.9], adapt: 5 },
+  chAngel: { p: [-73.4, 4.1, -14.3], t: [-77.4, 5.0, -14.3], adapt: 5 },
+  chMadonna: { p: [56.8, 4.1, -12.6], t: [56.8, 5.2, -17.15], adapt: 5 },
+  chSupper: { p: [56.8, 4.1, 11.4], t: [56.8, 5.3, 17.15], adapt: 5 },
+  chCross: { p: [0, 4.1, -25.5], t: [0, 11.2, -35.3], adapt: 5 },
   // along the route (indices into world.cathedral.stairs.route, counted from the end if negative)
   stair1Top: { route: [228, 238], adapt: 10 },
   catwalk: { route: [-33, -27], adapt: 8 },

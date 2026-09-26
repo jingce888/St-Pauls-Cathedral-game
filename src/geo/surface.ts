@@ -246,8 +246,9 @@ export function sweepOnSurface(b: GeoBuilder, surf: Surface, profile: Profile, p
   for (let i = 0; i < pts.length - 1; i++) {
     const dl = pts[i + 1][0] - pts[i][0], dp = pts[i + 1][1] - pts[i][1];
     const l = Math.hypot(dl, dp) || 1;
-    // profile (lat, proj): outward normal of the profile curve (lat grows away from the path, proj out)
-    pn.push([dp / l, -dl / l]);
+    // profile (lat, proj), listed from the path outwards over the top of the moulding (lat 0 up to
+    // its face, out, back down to the wall): the solid lies to the right of the direction of travel
+    pn.push([-dp / l, dl / l]);
   }
   const place = (i: number, lat: number, proj: number): V3 => {
     const s = path[i][0] + miter[i][0] * lat, y = path[i][1] + miter[i][1] * lat;

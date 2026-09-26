@@ -11,6 +11,7 @@ import type { Ctx } from "./kit";
 import { AISLE_SPOTS, CHOIR_X, INT, SPANDRELS, saucer } from "./interior";
 import { placeRelief } from "./reliefs";
 import { monumentRelief } from "./sculpture";
+import { PHOTO_PLACES } from "./photoReliefs";
 
 /**
  * Wall paintings and mosaics: the Evangelists and Prophets in gold mosaic above the eight arches
@@ -21,6 +22,9 @@ import { monumentRelief } from "./sculpture";
 
 const F = FLOOR;
 type G = CanvasRenderingContext2D;
+
+/** Where the monuments stand (for the information cards). */
+export const MONUMENTS: { x: number; z: number; n: V2 }[] = [];
 
 /** Where the framed paintings hang (for the information cards). */
 export const HUNG: { id: "lightOfTheWorld" | "annunciation"; x: number; z: number }[] = [];
@@ -627,6 +631,7 @@ function aisles(ctx: Ctx) {
   };
   const lotw = pick(true), ann = pick(false);
   HUNG.length = 0;
+  MONUMENTS.length = 0;
   let v = 0;
   AISLE_SPOTS.forEach((s, i) => {
     if (i === lotw) {
@@ -636,7 +641,10 @@ function aisles(ctx: Ctx) {
       framedPainting(ctx, annunciation(), [s.x, s.z], s.n, F + 3.3, 2.5, 1.8);
       HUNG.push({ id: "annunciation", x: s.x + s.n[0] * 1.5, z: s.z + s.n[1] * 1.5 });
     }
-    else monument(ctx, [s.x, s.z], s.n, v++);
+    else if (!PHOTO_PLACES.some((p) => Math.hypot(p.x - s.x, p.z - s.z) < 4.8)) {
+      monument(ctx, [s.x, s.z], s.n, v++);
+      MONUMENTS.push({ x: s.x, z: s.z, n: s.n });
+    }
   });
 }
 

@@ -4,6 +4,7 @@ import { Terrain } from "./terrain";
 import { loadChurchyard, loadCity, type CityData, type Churchyard } from "./cityData";
 import { buildGroundMaps, buildGroundMeshes, makeGroundMaterial } from "./ground";
 import { buildCathedral, type CathedralResult } from "./cathedral";
+import { buildPhotoReliefs, loadPhotoReliefs, type PhotoRelief } from "./cathedral/photoReliefs";
 import { planLoop } from "./cathedral/plan";
 import { buildCity, type CityResult } from "./city";
 
@@ -20,12 +21,18 @@ export class World {
   cathedral!: CathedralResult;
   cityResult!: CityResult;
   readonly colliders: THREE.BufferGeometry[] = [];
+  /** Carvings made from photographs (heights; their textures load on their own). */
+  photoReliefs: PhotoRelief[] = [];
 
   async load() {
-    [this.terrain, this.city, this.churchyard] = await Promise.all([
+    [this.terrain, this.city, this.churchyard, this.photoReliefs] = await Promise.all([
       Terrain.load(`${DATA}terrain.bin`),
       loadCity(`${DATA}city.bin`),
       loadChurchyard(`${DATA}churchyard.json`),
+      loadPhotoReliefs(`${DATA}reliefs/`).catch((e) => {
+        console.warn("photo reliefs", e);
+        return [] as PhotoRelief[];
+      }),
     ]);
   }
 
@@ -57,7 +64,7 @@ export class World {
   }
 
   buildCathedral(app: App) {
-    this.cathedral = buildCathedral(app);
+    this.cathedral = buildCathedral(app, [(ctx) => buildPhotoReliefs(ctx, this.photoReliefs, `${DATA}reliefs/`)]);
     app.scene.add(this.cathedral.group);
     this.colliders.push(this.cathedral.collision);
     if (import.meta.env.DEV) console.log("cathedral", JSON.stringify(this.cathedral.report), JSON.stringify(this.cathedral.drawn));

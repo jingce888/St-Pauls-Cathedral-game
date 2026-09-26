@@ -1,6 +1,7 @@
 import { DOME, STEPS } from "../world/dims";
 import { INT } from "../world/cathedral/interior";
 import type { StairInfo } from "../world/cathedral/stairs";
+import { PHOTO_PLACES } from "../world/cathedral/photoReliefs";
 
 export type Gallery = "whispering" | "stone" | "golden";
 
@@ -47,10 +48,12 @@ export function where(x: number, y: number, z: number, stairs: StairInfo): Where
   const inTransept = Math.abs(x) < INT.zA + 0.2 && Math.abs(z) < INT.zT + 0.2;
   if ((inNave || inTransept) && y > 1.5 && y < 31) {
     let name = "The Nave";
-    if (r < INT.octR + 1) name = "Under the Dome";
+    const chapel = PHOTO_PLACES.find((p) => p.chapel && Math.hypot(x - (p.x + p.n[0] * 2), z - (p.z + p.n[1] * 2)) < 3.5);
+    if (chapel?.chapel) name = chapel.chapel;
+    else if (r < INT.octR + 1) name = "Under the Dome";
     else if (inTransept && !inNave) name = z < 0 ? "The North Transept" : "The South Transept";
+    else if (Math.abs(z) > INT.zP) name = x > INT.zA ? (z < 0 ? "The North Quire Aisle" : "The South Quire Aisle") : z < 0 ? "The North Aisle" : "The South Aisle";
     else if (x > INT.zA) name = x > 50 ? "The High Altar" : "The Quire";
-    else if (Math.abs(z) > INT.zP) name = z < 0 ? "The North Aisle" : "The South Aisle";
     return { name, sub: "St Paul's Cathedral", adapt: 4.2, steps: null, gallery: null, inside: true };
   }
   if (x < -79 && x > -87.5 && Math.abs(z) < 18 && y > 2) return { name: "The West Portico", sub: "Under the great pediment", adapt: 1.5, steps: null, gallery: null, inside: false };

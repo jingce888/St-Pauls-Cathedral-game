@@ -1,0 +1,42 @@
+[
+ {
+  "id": "george",
+  "width": 2.3,
+  "height": 2.65,
+  "depth": 0.315,
+  "cols": 151,
+  "rows": 174
+ },
+ {
+  "id": "angel",
+  "width": 1.62,
+  "height": 1.999,
+  "depth": 0.294,
+  "cols": 131,
+  "rows": 161
+ },
+ {
+  "id": "madonna",
+  "width": 1.95,
+  "height": 2.056,
+  "depth": 0.357,
+  "cols": 151,
+  "rows": 159
+ },
+ {
+  "id": "supper",
+  "width": 3.2,
+  "height": 2.299,
+  "depth": 0.273,
+  "cols": 211,
+  "rows": 152
+ },
+ {
+  "id": "cross",
+  "width": 3.6,
+  "height": 2.746,
+  "depth": 0.315,
+  "cols": 211,
+  "rows": 161
+ }
+]
