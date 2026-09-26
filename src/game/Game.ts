@@ -36,12 +36,18 @@ export class Game {
     this.collider = new Collider(world.colliders);
     this.player = new Player(world.terrain, this.collider);
     this.input = new Input(app.renderer.domElement, document.getElementById("stick"));
-    this.player.bounds = (p) => {
+    const terrain = world.terrain;
+    this.player.bounds = (p, px, pz) => {
       const r = Math.hypot(p.x, p.z);
       const R = 470;
       if (r > R) {
         p.x *= R / r;
         p.z *= R / r;
+      }
+      // the river bank: no walking into the Thames
+      if (p.y < terrain.bank + 1 && terrain.height(p.x, p.z) < terrain.bank - 0.8) {
+        p.x = px;
+        p.z = pz;
       }
     };
     this.goTo("westFront");
@@ -65,6 +71,66 @@ export class Game {
       cam.fov = fov;
       cam.updateProjectionMatrix();
     }
+  }
+
+  /** The walk from Ludgate Hill into the cathedral and to the foot of the dome stair. */
+  approachRoute(): [number, number, number][] {
+    return [
+      [-132, 0, -6], [-110, 0, -2], [-99, 0, -1], [-88, 0, -1], [-82, 0, 0], [-77, 0, 0], [-60, 0, 0],
+      [-30, 0, 0], [-14, 0, 3], [-11.5, 0, 8.5], [-11.2, 0, 11.2],
+    ];
+  }
+
+  /**
+   * Headless autopilot: walks through the given waypoints at 60 Hz and reports how far it got,
+   * where it got stuck, and whether it fell (falls are caught and counted).
+   */
+  followPath(points: [number, number, number][], maxSeconds = 1200, run = false) {
+    const pl = this.player;
+    const inp = { move: new THREE.Vector2(0, 1), run, look: new THREE.Vector2() };
+    let rescues = 0;
+    const prevRescue = pl.onRescue;
+    const events: string[] = [];
+    pl.onRescue = () => {
+      rescues++;
+      events.push(`rescue near waypoint ${i} at ${pl.feet.toArray().map((v) => v.toFixed(2)).join(",")}`);
+    };
+    let i = 0, best = Infinity, sinceBest = 0, t = 0;
+    const dt = 1 / 60;
+    let stuck: string | null = null;
+    let maxOff = 0;
+    while (t < maxSeconds) {
+      const [tx, ty, tz] = points[i];
+      let d = Math.hypot(tx - pl.feet.x, tz - pl.feet.z);
+      while (i < points.length - 1) {
+        const n = points[i + 1];
+        const dn = Math.hypot(n[0] - pl.feet.x, n[2] - pl.feet.z);
+        if (d < 0.3 || (dn < d && d < 0.9 && Math.abs(n[1] - pl.feet.y) < 1.2)) {
+          i++;
+          best = Infinity;
+          sinceBest = 0;
+          d = dn;
+        } else break;
+      }
+      if (i === points.length - 1 && d < 0.3) break;
+      const [ax, , az] = points[i];
+      pl.yaw = Math.atan2(-(ax - pl.feet.x), -(az - pl.feet.z));
+      inp.move.set(0, 1);
+      pl.update(dt, inp);
+      t += dt;
+      maxOff = Math.max(maxOff, Math.abs(points[i][1] - pl.feet.y));
+      void ty;
+      if (d < best - 0.05) {
+        best = d;
+        sinceBest = 0;
+      } else if ((sinceBest += dt) > 4) {
+        stuck = `stuck before waypoint ${i}/${points.length - 1} (${points[i].map((v) => v.toFixed(2)).join(",")}) at ${pl.feet.toArray().map((v) => v.toFixed(2)).join(",")}`;
+        break;
+      }
+    }
+    pl.onRescue = prevRescue;
+    pl.apply(this.app.camera);
+    return { reached: i, total: points.length - 1, time: +t.toFixed(1), rescues, stuck, events, maxOff: +maxOff.toFixed(2), at: pl.feet.toArray().map((v) => +v.toFixed(2)) };
   }
 
   /** Headless helper: walks with fixed input for `seconds` (60 Hz), returns the trace. */

@@ -139,7 +139,13 @@ export function buildWalls(ctx: Ctx, faces: Face[]) {
     if (op.door) {
       const outline = openingOutline(op.door, 4);
       stone.withPaint({ joint: JOINT.blocks, cav: 0.6 }, () => revealOnSurface(stone, surf, outline, 1.2));
-      ctx.g("wood").withPaint({ cav: 0.7 }, () => fillOnSurface(ctx.g("wood"), surf, outline, 1.2));
+      // the oak leaves stand open, turned back against the inside of the wall
+      const d = op.door, hw = (d.s1 - d.s0) / 2, cs = (d.s0 + d.s1) / 2;
+      for (const k of [-1, 1]) {
+        const sl = cs + k * (hw - 0.06);
+        const pa = surf.point(sl - 0.06, d.y0, 1.2), pb = surf.point(sl + 0.06, d.y0, 1.2 + hw * 0.55);
+        ctx.g("wood").withPaint({ cav: 0.8 }, () => ctx.g("wood").box(Math.min(pa[0], pb[0]), d.y0 + 0.02, Math.min(pa[2], pb[2]), Math.max(pa[0], pb[0]), d.y1 - 0.05, Math.max(pa[2], pb[2])));
+      }
       stone.withPaint({ joint: JOINT.none }, () => sweepOnSurface(stone, surf, surround(0.45, 0.2), outline.slice(1).concat([outline[0]]), false, { outwardFrom: [(op.door!.s0 + op.door!.s1) / 2, op.door!.y0] }));
     }
 

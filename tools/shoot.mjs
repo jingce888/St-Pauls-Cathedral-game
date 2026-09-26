@@ -60,6 +60,15 @@ export const POSES = {
   voidStair: { p: [14.2, 56.8, 1.5], t: [0, 66, 12], adapt: 10 },
   lanternRoom: { p: [0.4, 86.7, -1.2], t: [0, 86.5, 6], adapt: 4 },
   goldenDoor: { p: [0, 86.7, 5.5], t: [0, 86.2, 0], adapt: 1 },
+  sideDoor: { p: [-81.5, 4.1, 9.9], t: [-68, 4, 12], adapt: 4 },
+  southDoorOut: { p: [0, 3.6, 48], t: [0, 5.5, 37], adapt: 1 },
+  southDoorIn: { p: [0, 4.1, 26], t: [0, 4.4, 40], adapt: 3 },
+  westDoorIn: { p: [-68, 4.1, 0], t: [-90, 4.8, 0], adapt: 3 },
+  // along the route (indices into world.cathedral.stairs.route, counted from the end if negative)
+  stair1Top: { route: [228, 238], adapt: 10 },
+  catwalk: { route: [-33, -27], adapt: 8 },
+  spiralTop: { route: [-18, -14], adapt: 5 },
+  lanternExit: { route: [-9, -2], adapt: 3 },
 };
 
 async function startVite() {
@@ -107,7 +116,13 @@ try {
     const p = POSES[name];
     if (!p) { console.warn(`unknown pose ${name}`); continue; }
     const t1 = Date.now();
-    await page.evaluate((p) => window.__stpauls.lookAt(...p.p, ...p.t), p);
+    if (p.route) {
+      await page.evaluate(([i, j]) => {
+        const r = window.__stpauls.world.cathedral.stairs.route;
+        const a = r[i < 0 ? r.length + i : i], b = r[j < 0 ? r.length + j : j];
+        window.__stpauls.lookAt(a[0], a[1] + 1.63, a[2], b[0], b[1] + 1.5, b[2]);
+      }, p.route);
+    } else await page.evaluate((p) => window.__stpauls.lookAt(...p.p, ...p.t), p);
     await page.evaluate((k) => window.__stpauls.adapt(k), p.adapt ?? 1);
     for (let i = 0; i < FRAMES; i++) await page.evaluate(() => window.__stpauls.render());
     const file = path.join(ROOT, "shots", `${TAG}-${name}.png`);

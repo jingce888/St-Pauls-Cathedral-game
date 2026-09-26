@@ -50,6 +50,9 @@ export const INT = {
   drumTopR: DOME.innerR + 0.3,
 } as const;
 
+/** Centre (|z|) of the two side doors in the west front. */
+export const WEST_SIDE_DOOR = 9.875;
+
 /** Bay boundaries (x) of the nave and choir vaults, and the transept (|z|). */
 export const NAVE_X = [INT.xW, -66.4, -55.5, -44.6, -33.7, -INT.pierEnd];
 export const CHOIR_X = [INT.pierEnd, 33.7, 44.6, 55.5, INT.xE];
@@ -216,12 +219,21 @@ function interiorShell(ctx: Ctx, outline: V2[]) {
       if (s0 < 0.3 || s1 > len - 0.3) continue;
       ops.push({ o: { ...e.o, s0, s1 }, depth: d - 0.84 });
     }
-    // the great west door; the transept portico doors (shut)
-    let door: Opening | null = null;
-    if (Math.abs(a[0] - INT.xW) < 1e-6 && Math.abs(b[0] - INT.xW) < 1e-6) door = { s0: len / 2 - 2.15, s1: len / 2 + 2.15, y0: F, y1: F + 8.9, head: "flat" };
-    const centralEnd = (Math.abs(a[0] - INT.xW) < 1e-6 && Math.abs(b[0] - INT.xW) < 1e-6) || (Math.abs(Math.abs(a[1]) - INT.zT) < 1e-6 && Math.abs(Math.abs(b[1]) - INT.zT) < 1e-6) || isApse;
+    // doors: the great west door and the two side doors of the west front, the transept doors
+    const isWest = Math.abs(a[0] - INT.xW) < 1e-6 && Math.abs(b[0] - INT.xW) < 1e-6;
+    const isTransEnd = Math.abs(Math.abs(a[1]) - INT.zT) < 1e-6 && Math.abs(Math.abs(b[1]) - INT.zT) < 1e-6;
+    const doors: { o: Opening; depth: number }[] = [];
+    if (isWest) {
+      doors.push({ o: { s0: len / 2 - 2.15, s1: len / 2 + 2.15, y0: F, y1: F + 8.9, head: "flat" }, depth: 1.62 });
+      for (const zc of [WEST_SIDE_DOOR, -WEST_SIDE_DOOR]) {
+        const sc = (zc - a[1]) * dir[1];
+        doors.push({ o: { s0: sc - 1.2, s1: sc + 1.2, y0: F, y1: F + 5.6, head: "flat" }, depth: 83.05 - 1.2 + INT.xW + 0.02 });
+      }
+    }
+    if (isTransEnd) doors.push({ o: { s0: len / 2 - 1.55, s1: len / 2 + 1.55, y0: F, y1: F + 6.3, head: "flat" }, depth: 37.05 - INT.zT - 1.2 + 0.02 });
+    const centralEnd = isWest || isTransEnd || isApse;
     const top = centralEnd ? INT.vaultSpring + INT.vaultRise + 0.2 : INT.arcCrown + 0.3;
-    const openings = [...ops.map((x) => x.o), ...(door ? [door] : [])];
+    const openings = [...ops.map((x) => x.o), ...doors.map((d) => d.o)];
     st.withPaint({ joint: JOINT.ashlar, cav: 0.95 }, () => stripPanel(st, surf, 0, len, F - 0.05, top, openings, isApse ? 0.6 : 2.0));
     for (const { o, depth } of ops) {
       const outl = openingOutline(o, 12);
@@ -229,16 +241,22 @@ function interiorShell(ctx: Ctx, outline: V2[]) {
       // surround
       st.withPaint({ joint: JOINT.none }, () => sweepOnSurface(st, surf, new P(0, 0).to(0, 0.08).to(0.26, 0.08).to(0.26, 0).build(), outl.slice(1).concat([outl[0]]), false, { outwardFrom: [(o.s0 + o.s1) / 2, o.y0] }));
     }
-    if (door) {
+    for (const { o: door, depth } of doors) {
       const outl = openingOutline(door, 4);
-      st.withPaint({ joint: JOINT.blocks, cav: 0.75 }, () => revealOnSurface(st, surf, outl, 1.62));
+      // jambs, soffit and the floor of the passage through the wall
+      st.withPaint({ joint: JOINT.blocks, cav: 0.75 }, () => revealOnSurface(st, surf, outl, depth));
+      ctx.g("marble").withPaint({ cav: 0.9 }, () => {
+        const p0 = surf.point(door.s0, F + 0.003, -0.02), p1 = surf.point(door.s1, F + 0.003, depth + 0.05);
+        ctx.g("marble").box(Math.min(p0[0], p1[0]), F - 0.2, Math.min(p0[2], p1[2]), Math.max(p0[0], p1[0]), F + 0.003, Math.max(p0[2], p1[2]), "ny");
+      });
       st.withPaint({ joint: JOINT.none }, () => sweepOnSurface(st, surf, new P(0, 0).to(0, 0.12).to(0.4, 0.12).to(0.4, 0).build(), outl.slice(1).concat([outl[0]]), false, { outwardFrom: [(door.s0 + door.s1) / 2, door.y0] }));
-    }
-    // shut doors at the transept ends (oak, seen from inside)
-    if (Math.abs(Math.abs(a[1]) - INT.zT) < 1e-6 && Math.abs(Math.abs(b[1]) - INT.zT) < 1e-6) {
-      const w = ctx.g("wood");
-      const c = len / 2;
-      w.withPaint({ cav: 0.85 }, () => fillOnSurface(w, surf, openingOutline({ s0: c - 1.55, s1: c + 1.55, y0: F, y1: F + 6.3, head: "flat" }, 2), -0.03));
+      // collision: floor through the wall and the two jambs
+      const q0 = surf.point(door.s0, F, -0.3), q1 = surf.point(door.s1, F, depth + 1.4);
+      col.box(Math.min(q0[0], q1[0]), F - 0.6, Math.min(q0[2], q1[2]), Math.max(q0[0], q1[0]), F, Math.max(q0[2], q1[2]), "nx px nz pz ny");
+      for (const sj of [door.s0, door.s1]) {
+        const j0 = surf.point(sj, F - 0.5, 0), j1 = surf.point(sj, F - 0.5, depth + 1.3);
+        col.polyN([j0, j1, [j1[0], F + 4, j1[2]], [j0[0], F + 4, j0[2]]], [dir[0] * (sj === door.s0 ? 1 : -1), 0, dir[1] * (sj === door.s0 ? 1 : -1)]);
+      }
     }
     // skirting / plinth
     st.withPaint({ joint: JOINT.none, cav: 0.9 }, () => {
@@ -255,8 +273,8 @@ function interiorShell(ctx: Ctx, outline: V2[]) {
         st.sweep(new P(0.12, F).up(0.45).to(0.06, F + 0.55).to(0, F + 0.6).build(), [[p0[0], p0[2]], [p1[0], p1[2]]], false, { flip: true });
       }
     });
-    // collision: the wall up to head height, with the door left open
-    const colOps = door ? [door] : [];
+    // collision: the wall up to head height, with the doors left open
+    const colOps = doors.map((d) => d.o);
     col.withPaint({}, () => stripPanel(col, surf, 0, len, F - 0.5, F + 4, colOps, 4));
     void glass;
   }

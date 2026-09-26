@@ -109,37 +109,57 @@ function portico(ctx: Ctx, side: number) {
       }
       return pts;
     };
-    const terr: V2[] = [[-rWall - 2.6, wallZ + 0.02], ...ringPts(rWall).map(([x, z]) => [x, Math.max(z, wallZ + 0.02)] as V2), [rWall + 2.6, wallZ + 0.02]];
-    ctx.g("paving").cap(terr, terraceY, true, [ringPts(rT).map(([x, z]) => [x, Math.max(z, wallZ + 0.03)] as V2).reverse()]);
-    col.cap(terr, terraceY, true);
-    // low curved parapet wall, rising from the lower churchyard
-    const wall = arcSurface([0, cz], rWall + 0.5, out - Math.PI / 2, 1);
-    const L = Math.PI * (rWall + 0.5);
+    // terrace: the half ring between the round steps and the parapet, and a strip along the
+    // transept wall that leads out to the two side flights
+    const clampZ = (pts: V2[]) => pts.map(([x, z]) => [x, Math.max(z, wallZ + 0.02)] as V2);
+    const ring: V2[] = [...clampZ(ringPts(rWall)), ...clampZ(ringPts(rT)).reverse()];
+    const gapW = 1.25;
+    const strip: V2[] = [[-rWall - 3.1, wallZ + 0.02], [rWall + 3.1, wallZ + 0.02], [rWall + 3.1, wallZ + gapW], [-rWall - 3.1, wallZ + gapW]];
+    for (const poly of [ring, strip]) {
+      ctx.g("paving").cap(poly, terraceY, true);
+      col.cap(poly, terraceY, true);
+    }
+    // low curved parapet wall, rising from the lower churchyard; it stops short of the transept
+    // wall so that the terrace opens onto the side flights
+    const dA = Math.asin(Math.min(0.9, (wallZ - cz + gapW) / (rWall + 0.25)));
+    const aP0 = out - Math.PI / 2 + dA, aP1 = out + Math.PI / 2 - dA;
+    const wall = arcSurface([0, cz], rWall + 0.5, aP0, 1);
+    const L = (aP1 - aP0) * (rWall + 0.5);
     stone.withPaint({ joint: JOINT.ashlar }, () => stripPanel(stone, wall, 0, L, -2.5, terraceY + 1.05, [], 0.6));
-    const wallIn = arcSurface([0, cz], rWall, out - Math.PI / 2, 1, true);
-    stone.withPaint({ joint: JOINT.ashlar }, () => stripPanel(stone, wallIn, 0, Math.PI * rWall, terraceY, terraceY + 1.05, [], 0.6));
-    ringCap(stone, cz, rWall - 0.05, rWall + 0.6, terraceY + 1.05, out - Math.PI / 2, out + Math.PI / 2, true);
-    col.at(0, 0, cz, 0, () => col.lathe([[rWall + 0.2, -3], [rWall + 0.2, terraceY + 1.1]], 40, { a0: -(out + Math.PI / 2), a1: -(out - Math.PI / 2) }));
-    // side flights descending southwards at the ends of the terrace
+    const wallIn = arcSurface([0, cz], rWall, aP0, 1, true);
+    stone.withPaint({ joint: JOINT.ashlar }, () => stripPanel(stone, wallIn, 0, (aP1 - aP0) * rWall, terraceY, terraceY + 1.05, [], 0.6));
+    ringCap(stone, cz, rWall - 0.05, rWall + 0.6, terraceY + 1.05, aP0, aP1, true);
+    // square ends of the parapet
+    for (const a of [aP0, aP1]) {
+      const c = Math.cos(a), sn = Math.sin(a);
+      stone.withPaint({ joint: JOINT.ashlar }, () => stone.at(c * (rWall + 0.27), 0, cz + sn * (rWall + 0.27), Math.atan2(c, sn), () => stone.box(-0.35, -2.5, -0.3, 0.35, terraceY + 1.12, 0.3)));
+    }
+    col.at(0, 0, cz, 0, () => col.lathe([[rWall + 0.2, -3], [rWall + 0.2, terraceY + 1.1]], 40, { a0: -aP1, a1: -aP0 }));
+    // side flights descending southwards from the ends of the terrace
     for (const sx of [-1, 1]) {
       const n = 18, rise = (terraceY - -1.55) / n, run = 0.34;
       const x0 = sx * (rWall + 0.6), x1 = sx * (rWall + 3.1);
+      const z0 = wallZ + gapW;
       for (let i = 0; i < n; i++) {
         const y = terraceY - rise * (i + 1);
-        const za = wallZ + 0.5 + run * i, zb = za + run;
+        const za = z0 + run * i, zb = za + run;
         stone.withPaint({ joint: JOINT.blocks }, () => stone.box(Math.min(x0, x1), y - 0.4, za, Math.max(x0, x1), y + rise, zb, "ny"));
         col.box(Math.min(x0, x1), -3, za, Math.max(x0, x1), y + rise, zb);
+        // inner cheek (a low wall stepping down with the flight)
+        const xi = sx * (rWall + 0.6);
+        stone.withPaint({ joint: JOINT.ashlar }, () => stone.box(Math.min(xi, xi - sx * 0.3), y - 0.6, za, Math.max(xi, xi - sx * 0.3), y + rise + 0.9, zb));
+        col.box(Math.min(xi, xi - sx * 0.3), y - 0.6, za, Math.max(xi, xi - sx * 0.3), y + rise + 1.0, zb);
       }
-      // top landing
-      stone.withPaint({ joint: JOINT.blocks }, () => stone.box(Math.min(x0, x1), terraceY - 0.6, wallZ + 0.02, Math.max(x0, x1), terraceY, wallZ + 0.5, "ny"));
-      col.box(Math.min(x0, x1), -3, wallZ, Math.max(x0, x1), terraceY, wallZ + 0.5);
+      // the terrace strip's paving continues over the flight's head
+      stone.withPaint({ joint: JOINT.blocks }, () => stone.box(Math.min(x0, x1), terraceY - 0.6, wallZ + 0.02, Math.max(x0, x1), terraceY, z0, "ny"));
+      col.box(Math.min(x0, x1), -3, wallZ, Math.max(x0, x1), terraceY, z0);
       // outer cheek wall
       const xo = sx * (rWall + 3.1);
-      stone.withPaint({ joint: JOINT.ashlar }, () => stone.box(Math.min(xo, xo + sx * 0.5), -2.5, wallZ, Math.max(xo, xo + sx * 0.5), terraceY + 1.05, wallZ + 0.5 + run * n));
-      col.box(Math.min(xo, xo + sx * 0.5), -3, wallZ, Math.max(xo, xo + sx * 0.5), terraceY + 1.1, wallZ + 0.5 + run * n);
+      stone.withPaint({ joint: JOINT.ashlar }, () => stone.box(Math.min(xo, xo + sx * 0.5), -2.5, wallZ, Math.max(xo, xo + sx * 0.5), terraceY + 1.05, z0 + run * n));
+      col.box(Math.min(xo, xo + sx * 0.5), -3, wallZ, Math.max(xo, xo + sx * 0.5), terraceY + 1.1, z0 + run * n);
     }
     // urns flanking the steps
-    for (const sx of [-1, 1]) ctx.inst.add("urn", [sx * (rWall + 0.3), terraceY + 1.05, cz + 0.8], 0, 0.85);
+    for (const sx of [-1, 1]) ctx.inst.add("urn", [sx * Math.cos(dA) * (rWall + 0.27), terraceY + 1.12, cz + Math.sin(dA) * (rWall + 0.27)], 0, 0.85);
   }
 }
 

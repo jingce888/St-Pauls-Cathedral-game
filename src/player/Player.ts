@@ -52,10 +52,16 @@ export class Player {
   climb = 0;
   onStep: ((e: StepEvent) => void) | null = null;
   /** Extra limits: returns a corrected position or null. */
-  bounds: ((p: THREE.Vector3) => void) | null = null;
+  bounds: ((p: THREE.Vector3, prevX: number, prevZ: number) => void) | null = null;
   /** Speed multiplier (e.g. narrow stairs). */
   speedScale = 1;
   enabled = true;
+  /** Called when a fall is caught and the walker is put back where it last stood safely. */
+  onRescue: (() => void) | null = null;
+  /** Recent places where the feet were on solid ground (for catching falls). */
+  private safe: THREE.Vector3[] = [];
+  private safeT = 0;
+  private lastGroundY = 0;
 
   private seg = new THREE.Line3();
   private push = new THREE.Vector3();
@@ -75,6 +81,8 @@ export class Player {
     this.eyeVel = 0;
     this.lastFootY = this.feet.y;
     this.grounded = true;
+    this.lastGroundY = this.feet.y;
+    this.safe = [this.feet.clone()];
   }
 
   /** Highest walkable surface under (x, z) from yTop down over range. */
@@ -121,9 +129,33 @@ export class Player {
     const dist = Math.hypot(this.vel.x, this.vel.z) * dt;
     const n = Math.max(1, Math.ceil(dist / 0.12));
     const h = dt / n;
-    const prevY = this.feet.y;
+    const prevY = this.feet.y, prevX = this.feet.x, prevZ = this.feet.z;
     for (let i = 0; i < n; i++) this.subStep(h);
-    this.bounds?.(this.feet);
+    this.bounds?.(this.feet, prevX, prevZ);
+
+    // a fall of more than a storey is caught: back to where the feet last stood safely
+    if (this.grounded) {
+      this.lastGroundY = this.feet.y;
+      this.safeT -= dt;
+      if (this.safeT <= 0) {
+        this.safeT = 0.35;
+        this.safe.push(this.feet.clone());
+        if (this.safe.length > 12) this.safe.shift();
+      }
+    } else if (this.lastGroundY - this.feet.y > 3.2 || this.feet.y < this.terrain.height(this.feet.x, this.feet.z) - 2) {
+      const back = this.safe[Math.max(0, this.safe.length - 4)] ?? this.safe[0];
+      if (back) {
+        this.feet.copy(back);
+        this.vel.set(0, 0, 0);
+        this.grounded = true;
+        this.lastGroundY = back.y;
+        this.eyeY = back.y + EYE;
+        this.eyeVel = 0;
+        this.safe.length = Math.max(1, this.safe.length - 3);
+        this.onRescue?.();
+        return;
+      }
+    }
 
     // feel of walking
     const hs = Math.hypot(this.vel.x, this.vel.z);

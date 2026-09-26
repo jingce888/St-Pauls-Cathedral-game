@@ -67,7 +67,7 @@ export function buildWestFront(ctx: Ctx) {
     const door: Opening = { s0: L / 2 - 1.2, s1: L / 2 + 1.2, y0: FLOOR, y1: FLOOR + 5.6, head: "flat" };
     const win: Opening = { s0: L / 2 - 0.9, s1: L / 2 + 0.9, y0: FLOOR + 7.4, y1: FLOOR + 10.1, head: "round" };
     stone.withPaint({ joint: JOINT.ashlar }, () => stripPanel(stone, surf, 0, L, FLOOR, H.lowerEnt, [door, win], 1.5));
-    doorway(ctx, surf, door, 1.2);
+    doorway(ctx, surf, door, 1.2, true);
     windowIn(ctx, surf, win);
     // responds (pilasters) behind the column pairs
     for (const zc of [s * 9.375, s * 15.35]) {

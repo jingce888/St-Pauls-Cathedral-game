@@ -64,6 +64,11 @@ export interface StairInfo {
   lamps: V3[];
   /** Angle of the door by which the first stair reaches the gallery. */
   wgDoor1: number;
+  /**
+   * The walking line of the whole climb (feet positions), from the crossing floor outside the
+   * first stair's door to the Golden Gallery. Used by the automated route test and the guide.
+   */
+  route: V3[];
 }
 
 // ------------------------------------------------------------------------------ helpers
@@ -119,20 +124,27 @@ function sector(b: GeoBuilder, cx: number, cz: number, rIn: number, rOut: number
 
 /** Cylinder wall around (cx, cz) with one or more rectangular openings (angle, width, y0, y1). */
 function shaftWall(b: GeoBuilder, cx: number, cz: number, r: number, y0: number, y1: number, inside: boolean, openings: { a: number; w: number; y0: number; y1: number }[], seg = 64) {
-  const holes = openings.map((o) => ({ ...o, h: o.w / 2 / r }));
-  for (let i = 0; i < seg; i++) {
-    const a0 = (i / seg) * TAU, a1 = ((i + 1) / seg) * TAU;
+  const holes = openings.map((o) => ({ ...o, a: ((o.a % TAU) + TAU) % TAU, h: o.w / 2 / r }));
+  // segment boundaries: the regular divisions plus the exact edges of every opening
+  const cuts = new Set<number>();
+  for (let i = 0; i <= seg; i++) cuts.add((i / seg) * TAU);
+  for (const o of holes) for (const e of [o.a - o.h, o.a + o.h]) cuts.add(((e % TAU) + TAU) % TAU);
+  const angles = [...cuts].sort((p, q) => p - q);
+  const P = (a: number, y: number): V3 => [cx + r * Math.cos(a), y, cz + r * Math.sin(a)];
+  for (let i = 0; i < angles.length - 1; i++) {
+    const a0 = angles[i], a1 = angles[i + 1];
+    if (a1 - a0 < 1e-6) continue;
     const am = (a0 + a1) / 2;
-    let lo = y0, hi = y1;
-    const cut = holes.find((o) => Math.abs(((am - o.a + Math.PI * 3) % TAU) - Math.PI) < o.h);
-    const P = (a: number, y: number): V3 => [cx + r * Math.cos(a), y, cz + r * Math.sin(a)];
+    // every opening at this angle (doors can be stacked, one above the other)
+    const here = holes.filter((o) => Math.abs(((am - o.a + Math.PI * 3) % TAU) - Math.PI) < o.h).sort((p, q) => p.y0 - q.y0);
     const n: V3 = inside ? [-Math.cos(am), 0, -Math.sin(am)] : [Math.cos(am), 0, Math.sin(am)];
-    if (cut) {
-      if (cut.y0 > lo) b.polyN([P(a0, lo), P(a1, lo), P(a1, cut.y0), P(a0, cut.y0)], n);
-      lo = cut.y1;
+    let lo = y0;
+    for (const c of here) {
+      const top = Math.min(y1, c.y0);
+      if (top > lo) b.polyN([P(a0, lo), P(a1, lo), P(a1, top), P(a0, top)], n);
+      lo = Math.max(lo, c.y1);
     }
-    if (hi > lo) b.polyN([P(a0, lo), P(a1, lo), P(a1, hi), P(a0, hi)], n);
-    void hi;
+    if (y1 > lo) b.polyN([P(a0, lo), P(a1, lo), P(a1, y1), P(a0, y1)], n);
   }
 }
 
@@ -201,6 +213,9 @@ export function buildStairs(ctx: Ctx): StairInfo {
   const col = ctx.col;
   const lamps: V3[] = [];
   const zones: StairZone[] = [];
+  const route: V3[] = [];
+  const at = (c: V2, r: number, a: number, y: number): V3 => [c[0] + r * Math.cos(a), y, c[1] + r * Math.sin(a)];
+  const O: V2 = [0, 0];
 
   // ========================================================= 1. floor -> Whispering Gallery
   const [cx, cz] = ROUTE.c1;
@@ -209,8 +224,13 @@ export function buildStairs(ctx: Ctx): StairInfo {
   const rn = 0.3;
   const doorA = Math.atan2(-cz, -cx); // towards the dome's axis
   const h1 = (ROUTE.top1 - F) / ROUTE.n1;
-  const per = 18 * DEG;
+  // 221 steps turning 3910 degrees: the last step ends 50 degrees short of where the first one
+  // began, so the top landing (with the door, above the entry) follows it with full headroom
+  const per = (3910 / ROUTE.n1) * DEG;
   const a0 = doorA - 25 * DEG;
+  route.push(at([cx, cz], rOuter + 1.2, doorA, F), at([cx, cz], rOuter, doorA, F), at([cx, cz], 1.5, doorA, F), at([cx, cz], 1.25, a0 + 4 * DEG, F));
+  for (let k = 0; k < ROUTE.n1; k++) route.push(at([cx, cz], 1.25, a0 - per * (k + 0.5), F + h1 * (k + 1)));
+  route.push(at([cx, cz], 1.25, a0 + 40 * DEG, ROUTE.top1), at([cx, cz], 1.5, doorA, ROUTE.top1), at([cx, cz], rw + 0.4, doorA, ROUTE.top1));
   for (let k = 0; k < ROUTE.n1; k++) {
     const aHi = a0 - per * k, aLo = a0 - per * (k + 1);
     const y = F + h1 * (k + 1);
@@ -223,11 +243,11 @@ export function buildStairs(ctx: Ctx): StairInfo {
   }
   // landings: entry at the floor, exit at the top
   st.withPaint({ joint: JOINT.blocks }, () => {
-    sector(st, cx, cz, rn, rw + 0.04, a0, a0 + 70 * DEG, F + 0.004);
-    sector(st, cx, cz, rn, rw + 0.04, a0, a0 + 70 * DEG, ROUTE.top1);
-    sector(st, cx, cz, rn, rw + 0.04, a0, a0 + 70 * DEG, ROUTE.top1 - 0.25, false);
+    sector(st, cx, cz, rn, rw + 0.04, a0, a0 + 45 * DEG, F + 0.004);
+    sector(st, cx, cz, rn, rw + 0.04, a0, a0 + 50 * DEG, ROUTE.top1);
+    sector(st, cx, cz, rn, rw + 0.04, a0, a0 + 50 * DEG, ROUTE.top1 - 0.25, false);
   });
-  sector(col, cx, cz, rn, rw + 0.05, a0, a0 + 70 * DEG, ROUTE.top1);
+  sector(col, cx, cz, rn, rw + 0.05, a0, a0 + 50 * DEG, ROUTE.top1);
   // newel, shaft walls (inside and outside), doors
   const shaftTop = ROUTE.top1 + 2.4;
   st.withPaint({ joint: JOINT.drums, cav: 0.9 }, () => st.at(cx, 0, cz, 0, () => st.lathe([[rn, F], [rn, shaftTop]], 16, { uvR: rn })));
@@ -277,8 +297,11 @@ export function buildStairs(ctx: Ctx): StairInfo {
     void pa;
   }
   pathStairs(st, col, ptsB, 0.62, { walls: true, head: 2.35 });
+  route.push(at(O, rB + 0.15, aStart, ROUTE.top1), at(O, rB, aStart - 1.0 / rB, ROUTE.top1));
+  for (let k = 0; k < ROUTE.n1b; k++) route.push(at(O, rB, aStart - (1.3 + (k + 0.5) * goingB) / rB, ptsB[k].y));
   // top landing and the doorway through the gallery wall
   const aWG1 = aEndB - 0.6 / rB;
+  route.push(at(O, rB, aWG1 + 0.2 / rB, DOME.whisperingGallery), at(O, rB - 0.6, aWG1, DOME.whisperingGallery), at(O, DOME.whisperR - 0.2, aWG1, DOME.whisperingGallery), at(O, 16.0, aWG1, DOME.whisperingGallery));
   {
     const yT = DOME.whisperingGallery;
     const land: V2[] = [];
@@ -306,8 +329,20 @@ export function buildStairs(ctx: Ctx): StairInfo {
   const rw2 = 1.0, rn2 = 0.13;
   const door2 = ROUTE.wgDoor2 + Math.PI; // on the shaft, facing the dome's axis
   const h2 = (y2m - y2a) / ROUTE.n2a;
-  const per2 = 30 * DEG;
-  const b2 = door2 + 38 * DEG;
+  // 105 steps turning 2466 degrees (15 a turn, 2.9 m of rise a turn): the last step ends just
+  // before the door, whose landing then has the flight a full turn below it
+  const per2 = (2466 / ROUTE.n2a) * DEG;
+  // the first step starts just past the door, so the steps a turn higher clear its head
+  const b2 = door2 + 27 * DEG;
+  // walk round the gallery to the drum stair's door
+  {
+    const aFrom = aWG1, aTo = ROUTE.wgDoor2;
+    const n = Math.ceil(Math.abs(aFrom - aTo) / (3 * DEG));
+    for (let i = 1; i <= n; i++) route.push(at(O, 16.0, aFrom + ((aTo - aFrom) * i) / n, y2a));
+    route.push(at(O, DOME.whisperR, aTo, y2a), at(O, ROUTE.r2 - rw2 + 0.2, aTo, y2a), at(c2, 0.6, door2 + 15 * DEG, y2a));
+    for (let k = 0; k < ROUTE.n2a; k++) route.push(at(c2, 0.6, b2 + per2 * (k + 0.5), y2a + h2 * (k + 1)));
+    route.push(at(c2, 0.6, door2 - 15 * DEG, y2m), at(c2, 0.6, door2, y2m), at(c2, rw2 + 0.3, door2, y2m));
+  }
   for (let k = 0; k < ROUTE.n2a; k++) {
     const aLo = b2 + per2 * k, aHi = aLo + per2;
     const y = y2a + h2 * (k + 1);
@@ -319,16 +354,17 @@ export function buildStairs(ctx: Ctx): StairInfo {
     }
   }
   const shaft2Top = y2m + 2.3;
+  // (the last step ends at door2 - 65 deg: the top landing runs from there past the door)
   st.withPaint({ joint: JOINT.blocks }, () => {
-    sector(st, c2[0], c2[1], rn2, rw2 + 0.03, door2 - 40 * DEG, b2, y2a + 0.004);
-    sector(st, c2[0], c2[1], rn2, rw2 + 0.03, door2 - 60 * DEG, door2 + 25 * DEG, y2m);
-    sector(st, c2[0], c2[1], rn2, rw2 + 0.03, door2 - 60 * DEG, door2 + 25 * DEG, y2m - 0.2, false);
+    sector(st, c2[0], c2[1], rn2, rw2 + 0.03, door2 - 27 * DEG, b2, y2a + 0.004);
+    sector(st, c2[0], c2[1], rn2, rw2 + 0.03, door2 - 27 * DEG, door2 + 27 * DEG, y2m);
+    sector(st, c2[0], c2[1], rn2, rw2 + 0.03, door2 - 27 * DEG, door2 + 27 * DEG, y2m - 0.2, false);
   });
-  sector(col, c2[0], c2[1], rn2, rw2 + 0.05, door2 - 40 * DEG, b2, y2a);
-  sector(col, c2[0], c2[1], rn2, rw2 + 0.05, door2 - 60 * DEG, door2 + 25 * DEG, y2m);
+  sector(col, c2[0], c2[1], rn2, rw2 + 0.05, door2 - 27 * DEG, b2, y2a);
+  sector(col, c2[0], c2[1], rn2, rw2 + 0.05, door2 - 27 * DEG, door2 + 27 * DEG, y2m);
   st.withPaint({ joint: JOINT.drums, cav: 0.9 }, () => st.at(c2[0], 0, c2[1], 0, () => st.lathe([[rn2, y2a], [rn2, shaft2Top]], 12, { uvR: rn2 })));
   col.at(c2[0], 0, c2[1], 0, () => col.lathe([[rn2 + 0.04, y2a - 0.5], [rn2 + 0.04, shaft2Top]], 10));
-  const doors2 = [{ a: door2, w: 0.95, y0: y2a - 0.1, y1: y2a + 2.0 }, { a: door2, w: 0.95, y0: y2m - 0.1, y1: y2m + 2.05 }];
+  const doors2 = [{ a: door2, w: 0.82, y0: y2a - 0.1, y1: y2a + 1.95 }, { a: door2, w: 0.82, y0: y2m - 0.1, y1: y2m + 2.05 }];
   st.withPaint({ joint: JOINT.ashlar, cav: 0.95 }, () => {
     shaftWall(st, c2[0], c2[1], rw2, y2a - 0.05, shaft2Top, true, doors2, 40);
     st.at(c2[0], 0, c2[1], 0, () => st.cap(circleAt(rw2 + 0.05, 24), shaft2Top, false));
@@ -363,6 +399,16 @@ export function buildStairs(ctx: Ctx): StairInfo {
     col.cap(land, y2m, true);
   }
   pathStairs(st, col, pts2, 0.55, { walls: true, head: 2.3 });
+  route.push(at(O, rF + 0.2, aF0, y2m), at(O, rF, aF0 - 0.3 / rF, y2m));
+  for (let k = 0; k < ROUTE.n2b; k++) route.push(at(O, rF, aF0 - (0.6 + (k + 0.5) * going2b) / rF, pts2[k].y));
+  route.push(at(O, rF, ROUTE.attic1 + 0.25 / rF, y2b), at(O, rF + 0.3, ROUTE.attic1, y2b), at(O, DOME.atticR + 0.3, ROUTE.attic1, y2b), at(O, 18.2, ROUTE.attic1, y2b));
+  // along the Stone Gallery to the attic door of the last stage
+  {
+    const aFrom = ROUTE.attic1, aTo = ROUTE.attic2;
+    const n = Math.ceil(Math.abs(aFrom - aTo) / (3 * DEG));
+    for (let i = 1; i <= n; i++) route.push(at(O, 18.2, aFrom + ((aTo - aFrom) * i) / n, y2b));
+    route.push(at(O, DOME.atticR + 0.3, aTo, y2b), at(O, 16.0, aTo, y2b));
+  }
   // landing and the doorway out through the attic onto the Stone Gallery
   {
     const aEnd = aF0 - (0.6 + ROUTE.n2b * going2b) / rF;
@@ -371,7 +417,29 @@ export function buildStairs(ctx: Ctx): StairInfo {
     for (const [r, a] of [[rF + 0.55, aEnd + 0.02], [rF + 0.55, aD - 0.7 / rF], [rF - 0.55, aD - 0.7 / rF], [rF - 0.55, aEnd + 0.02]] as V2[]) land.push([r * Math.cos(a), r * Math.sin(a)]);
     st.withPaint({ joint: JOINT.blocks }, () => st.cap(land, y2b, true));
     col.cap(land, y2b, true);
-    corridor(st, col, [(rF - 0.2) * Math.cos(aD), (rF - 0.2) * Math.sin(aD)], [(DOME.atticR + 0.05) * Math.cos(aD), (DOME.atticR + 0.05) * Math.sin(aD)], y2b, 0.55, 2.05);
+    // the doorway through the attic starts at the landing's outer edge (the landing is entered from the side)
+    corridor(st, col, [(rF + 0.5) * Math.cos(aD), (rF + 0.5) * Math.sin(aD)], [(DOME.atticR + 0.05) * Math.cos(aD), (DOME.atticR + 0.05) * Math.sin(aD)], y2b, 0.55, 2.05);
+    // the landing is walled off from the space under the outer dome: inner wall, end wall, ceiling
+    const aFar = aD - 0.7 / rF;
+    const rI = rF - 0.55, rO = rF + 0.55, yT = y2b + 2.3;
+    const n = 6;
+    st.withPaint({ joint: JOINT.ashlar, cav: 0.9 }, () => {
+      for (let i = 0; i < n; i++) {
+        const a0 = aFar + ((aEnd - aFar) * i) / n, a1 = aFar + ((aEnd - aFar) * (i + 1)) / n;
+        const P = (r: number, a: number, y: number): V3 => [r * Math.cos(a), y, r * Math.sin(a)];
+        const am = (a0 + a1) / 2;
+        st.polyN([P(rI, a0, y2b - 0.2), P(rI, a1, y2b - 0.2), P(rI, a1, yT), P(rI, a0, yT)], [Math.cos(am), 0, Math.sin(am)]);
+        st.polyN([P(rI, a0, yT), P(rI, a1, yT), P(rO, a1, yT), P(rO, a0, yT)], [0, -1, 0]);
+        // the outside of the housing, seen from the void
+        st.polyN([P(rI - 0.3, a0, y2b - 0.2), P(rI - 0.3, a1, y2b - 0.2), P(rI - 0.3, a1, yT + 0.3), P(rI - 0.3, a0, yT + 0.3)], [-Math.cos(am), 0, -Math.sin(am)]);
+        st.polyN([P(rI - 0.3, a0, yT + 0.3), P(rI - 0.3, a1, yT + 0.3), P(rO, a1, yT + 0.3), P(rO, a0, yT + 0.3)], [0, 1, 0]);
+        col.polyN([P(rI, a0, y2b - 0.3), P(rI, a1, y2b - 0.3), P(rI, a1, y2b + 2.2), P(rI, a0, y2b + 2.2)], [Math.cos(am), 0, Math.sin(am)]);
+      }
+      const e0: V3 = [(rI - 0.3) * Math.cos(aFar), y2b - 0.2, (rI - 0.3) * Math.sin(aFar)], e1: V3 = [rO * Math.cos(aFar), y2b - 0.2, rO * Math.sin(aFar)];
+      const tn: V3 = [Math.sin(aFar), 0, -Math.cos(aFar)];
+      st.polyN([e0, e1, [e1[0], yT + 0.3, e1[2]], [e0[0], yT + 0.3, e0[2]]], tn);
+      col.polyN([e0, e1, [e1[0], y2b + 2.2, e1[2]], [e0[0], y2b + 2.2, e0[2]]], tn);
+    });
   }
   lamps.push([(rF + 0.45) * Math.cos(aF0 - 2.5 / rF), y2m + 2.2, (rF + 0.45) * Math.sin(aF0 - 2.5 / rF)]);
   zones.push({
@@ -395,6 +463,11 @@ export function buildStairs(ctx: Ctx): StairInfo {
     a3 += going3 / r;
   }
   pathStairs(st, col, pts3, 0.62, { walls: false, head: 2.3, thick: 0.18 });
+  route.push(at(O, coneR(y3a) + 0.72, ROUTE.attic2 + 0.5 / 15.5, y3a));
+  for (let k = 0; k < ROUTE.n3a; k++) {
+    const p = pts3[k], q = pts3[k + 1];
+    route.push([(p.x + q.x) / 2, p.y, (p.z + q.z) / 2]);
+  }
   // railing on the open side
   ctx.g("iron").withPaint({ cav: 1 }, () => railing(ctx.g("iron"), col, pts3.map((p) => [p.x + p.nx * 0.6, p.y, p.z + p.nz * 0.6] as V3), 1.0));
   // doorway through the attic from the Stone Gallery, and the landing inside
@@ -411,13 +484,14 @@ export function buildStairs(ctx: Ctx): StairInfo {
   const brick = ctx.g("coneBrick");
   const timber = ctx.g("domeTimber");
   {
-    const ring = (r: number, n = 96): V2[] => Array.from({ length: n }, (_, i) => [r * Math.cos((i / n) * TAU), r * Math.sin((i / n) * TAU)] as V2);
-    st.withPaint({ joint: JOINT.blocks, cav: 0.8 }, () => st.cap(ring(16.3), y3a, true, [ring(coneR(y3a))]));
-    col.cap(ring(16.3), y3a, true, [ring(coneR(y3a))]);
+    // floor of the void, except where the housing of the drum stair's last flight stands
+    const hA0 = ROUTE.attic1 - 5 * DEG, hA1 = ROUTE.wgDoor2 + 2.5 * DEG;
+    st.withPaint({ joint: JOINT.blocks, cav: 0.8 }, () => sector(st, 0, 0, coneR(y3a), 16.3, hA1, hA0 + TAU, y3a));
+    sector(col, 0, 0, coneR(y3a), 16.3, hA1, hA0 + TAU, y3a);
     // attic's inner face (with the two door openings)
-    const doorsAttic = [{ a: ROUTE.attic2, w: 1.15, y0: y3a - 0.1, y1: y3a + 2.05 }];
+    const doorsAttic = [{ a: ROUTE.attic2, w: 1.15, y0: y3a - 0.1, y1: y3a + 2.05 }, { a: ROUTE.attic1, w: 1.25, y0: y3a - 0.1, y1: y3a + 2.4 }];
     st.withPaint({ joint: JOINT.ashlar, cav: 0.9 }, () => shaftWall(st, 0, 0, 16.3, y3a - 0.05, DOME.outerBase + 0.8, true, doorsAttic, 96));
-    shaftWall(col, 0, 0, 16.28, y3a - 0.5, y3a + 3, true, doorsAttic, 64);
+    shaftWall(col, 0, 0, 16.28, y3a + 0.02, y3a + 3, true, doorsAttic, 64);
     // the cone (outer surface) from the gallery floor to the lantern, with the door near the top
     const aEnd3 = a3;
     const coneDoor = { a: aEnd3, w: 1.0, y0: y3b - 0.1, y1: y3b + 2.0 };
@@ -474,38 +548,97 @@ export function buildStairs(ctx: Ctx): StairInfo {
     const aC = a3;
     const iron = ctx.g("iron");
     const rIn = coneR(y3b) - 0.45;
-    const cw: V2[] = [[(rIn + 0.5) * Math.cos(aC) - 0.5 * Math.sin(aC), (rIn + 0.5) * Math.sin(aC) + 0.5 * Math.cos(aC)], [(rIn + 0.5) * Math.cos(aC) + 0.5 * Math.sin(aC), (rIn + 0.5) * Math.sin(aC) - 0.5 * Math.cos(aC)], [0.8 * Math.cos(aC) + 0.5 * Math.sin(aC), 0.8 * Math.sin(aC) - 0.5 * Math.cos(aC)], [0.8 * Math.cos(aC) - 0.5 * Math.sin(aC), 0.8 * Math.sin(aC) + 0.5 * Math.cos(aC)]];
+    const RS = 0.95, RN = 0.1, CAGE = 1.0;
+    const dir: V2 = [Math.cos(aC), Math.sin(aC)], tan: V2 = [-Math.sin(aC), Math.cos(aC)];
+    const cwAt = (r: number, s: number): V2 => [dir[0] * r + tan[0] * s, dir[1] * r + tan[1] * s];
+    const cw: V2[] = [cwAt(rIn + 0.5, -0.55), cwAt(rIn + 0.5, 0.55), cwAt(RS - 0.05, 0.55), cwAt(RS - 0.05, -0.55)];
     iron.withPaint({ cav: 0.9 }, () => {
       iron.cap(cw, y3b, true);
       iron.cap(cw, y3b - 0.06, false);
     });
     col.cap(cw, y3b, true);
     // doorway through the cone
-    corridor(st, col, [(coneR(y3b) + 0.62) * Math.cos(aC), (coneR(y3b) + 0.62) * Math.sin(aC)], [(rIn - 0.02) * Math.cos(aC), (rIn - 0.02) * Math.sin(aC)], y3b, 0.5, 2.0);
-    // railings along both sides of the catwalk
-    for (const s of [-1, 1]) {
-      const pa: V3 = [rIn * Math.cos(aC) - s * 0.5 * Math.sin(aC), y3b, rIn * Math.sin(aC) + s * 0.5 * Math.cos(aC)];
-      const pb: V3 = [0.9 * Math.cos(aC) - s * 0.5 * Math.sin(aC), y3b, 0.9 * Math.sin(aC) + s * 0.5 * Math.cos(aC)];
-      iron.withPaint({ cav: 1 }, () => railing(iron, col, [pa, pb], 1.0));
+    corridor(st, col, [(coneR(y3b) + 0.08) * Math.cos(aC), (coneR(y3b) + 0.08) * Math.sin(aC)], [(rIn - 0.02) * Math.cos(aC), (rIn - 0.02) * Math.sin(aC)], y3b, 0.5, 2.0);
+    // a small landing outside the cone door at the head of the helix
+    {
+      const land: V2[] = [];
+      const r0 = coneR(y3b) + 0.05, r1 = coneR(y3b) + 1.35;
+      // from the end of the last tread to just past the door
+      const aLast = Math.atan2(pts3[ROUTE.n3a].z, pts3[ROUTE.n3a].x);
+      const a0 = aC + ((((aLast - aC) + Math.PI * 3) % TAU) - Math.PI) + 0.004, a1 = aC + 0.75 / r1;
+      for (const [r, a] of [[r1, a0], [r1, a1], [r0, a1], [r0, a0]] as V2[]) land.push([r * Math.cos(a), r * Math.sin(a)]);
+      st.withPaint({ joint: JOINT.blocks }, () => st.cap(land, y3b, true));
+      col.cap(land, y3b, true);
+      const iron2 = ctx.g("iron");
+      const rp: V3[] = [];
+      for (let i = 0; i <= 4; i++) {
+        const a = a0 + ((a1 - a0) * i) / 4;
+        rp.push([(r1 - 0.02) * Math.cos(a), y3b, (r1 - 0.02) * Math.sin(a)]);
+      }
+      iron2.withPaint({ cav: 1 }, () => railing(iron2, col, rp, 1.0));
     }
-    // spiral on the axis: 11 steps, 30 degrees each, from the catwalk up to the lantern floor
+    // railings along both sides of the catwalk, up to the cage
+    for (const s of [-1, 1]) {
+      const pa = cwAt(rIn, s * 0.55), pb = cwAt(CAGE + 0.05, s * 0.55);
+      iron.withPaint({ cav: 1 }, () => railing(iron, col, [[pa[0], y3b, pa[1]], [pb[0], y3b, pb[1]]], 1.0));
+    }
+    // spiral on the axis: 11 steps of 30 degrees; the first one starts at the catwalk's end
     const h3b = (y3c - y3b) / ROUTE.n3b;
-    const aS = aC + Math.PI; // start on the far side of the newel from the catwalk end
+    const aS = aC - 15 * DEG;
     for (let k = 0; k < ROUTE.n3b; k++) {
       const aLo = aS + 30 * DEG * k, aHi = aLo + 30 * DEG;
       const y = y3b + h3b * (k + 1);
-      iron.withPaint({ cav: 1 }, () => wedge(iron, 0, 0, 0.08, 0.85, aLo, aHi, y, 0.05, aLo));
-      sector(col, 0, 0, 0.0, 0.9, aLo, aHi, y);
+      iron.withPaint({ cav: 1 }, () => wedge(iron, 0, 0, RN, RS, aLo, aHi, y, 0.05, aLo));
+      sector(col, 0, 0, 0.0, RS + 0.04, aLo, aHi, y);
     }
-    iron.withPaint({ cav: 1 }, () => iron.lathe([[0.08, y3b - 0.3], [0.08, y3c + 1.2]], 10));
-    col.lathe([[0.12, y3b - 0.3], [0.12, y3c + 1.2]], 8);
+    iron.withPaint({ cav: 1 }, () => iron.lathe([[RN, y3b - 0.3], [RN, y3c + 1.2]], 10));
+    col.lathe([[RN + 0.03, y3b - 0.3], [RN + 0.03, y3c + 1.2]], 8);
+    // the cage round the spiral: open towards the catwalk at the bottom and where one steps
+    // off at the top; nobody can fall into the cone
+    const aTop = aS + 30 * DEG * (ROUTE.n3b - 1) + 15 * DEG;
+    const cageTop = y3c + 1.05;
+    const openB = { a: aC, w: 2 * CAGE * 0.62, y0: y3b - 0.2, y1: y3c - 0.15 };
+    const openT = { a: aTop, w: 2 * CAGE * 0.45, y0: y3c - 0.2, y1: cageTop + 0.5 };
+    const inOpen = (a: number, y: number) => [openB, openT].some((o) => Math.abs(((a - o.a + Math.PI * 3) % TAU) - Math.PI) < o.w / 2 / CAGE && y > o.y0 && y < o.y1);
+    iron.withPaint({ cav: 1 }, () => {
+      const nb = 36;
+      for (let i = 0; i < nb; i++) {
+        const a = (i / nb) * TAU;
+        const c = Math.cos(a) * CAGE, s2 = Math.sin(a) * CAGE;
+        // bars run from the lowest to the highest point not inside an opening
+        let yA = y3b - 0.05, yB = cageTop;
+        if (inOpen(a, y3b + 0.5)) yA = openB.y1;
+        if (inOpen(a, cageTop - 0.2)) yB = openT.y0;
+        if (yB > yA + 0.1) iron.box(c - 0.012, yA, s2 - 0.012, c + 0.012, yB, s2 + 0.012);
+      }
+      for (const y of [y3b + 1.0, y3c - 0.1, cageTop]) {
+        // rings, broken at the openings
+        const n = 48;
+        for (let i = 0; i < n; i++) {
+          const a0 = (i / n) * TAU, a1 = ((i + 1) / n) * TAU;
+          if (inOpen((a0 + a1) / 2, y)) continue;
+          const p0: V3 = [Math.cos(a0) * CAGE, y, Math.sin(a0) * CAGE], p1: V3 = [Math.cos(a1) * CAGE, y, Math.sin(a1) * CAGE];
+          iron.polyN([[p0[0], y - 0.03, p0[2]], [p1[0], y - 0.03, p1[2]], [p1[0], y + 0.03, p1[2]], [p0[0], y + 0.03, p0[2]]], [Math.cos((a0 + a1) / 2), 0, Math.sin((a0 + a1) / 2)]);
+        }
+      }
+    });
+    shaftWall(col, 0, 0, CAGE, y3b - 0.4, cageTop + 0.2, false, [openB, openT], 48);
     zones.push({
       base: STEPS.stone + ROUTE.n3a, y0: y3b, y1: y3c, steps: ROUTE.n3b,
-      test: (x, y, z) => Math.hypot(x, z) < 1.0 && y > y3b - 0.3 && y < y3c + 0.3,
+      test: (x, y, z) => Math.hypot(x, z) < CAGE + 0.1 && y > y3b - 0.3 && y < y3c + 0.3,
     });
-    // the lantern room: floor round the stairwell, railing, inner walls, the door out
-    const room = lanternRoom(ctx, y3c);
-    void room;
+    // route: out of the helix, through the cone, along the catwalk, up the spiral
+    route.push(at(O, coneR(y3b) + 0.5, aC, y3b), at(O, rIn, aC, y3b), at(O, 2.0, aC, y3b), at(O, 1.15, aC, y3b));
+    for (let k = 0; k < ROUTE.n3b; k++) route.push(at(O, 0.55, aS + 30 * DEG * (k + 0.5), y3b + h3b * (k + 1)));
+    route.push(at(O, 0.55, aTop, y3c), at(O, 1.25, aTop, y3c), at(O, 1.55, aTop, y3c));
+    // round the room to the door and out onto the Golden Gallery
+    const aDoor = ROUTE.lanternDoor;
+    let d = ((aDoor - aTop + Math.PI * 3) % TAU) - Math.PI;
+    const n = Math.ceil(Math.abs(d) / (12 * DEG));
+    for (let i = 1; i <= n; i++) route.push(at(O, 1.55, aTop + (d * i) / n, y3c));
+    d = 0;
+    route.push(at(O, 2.4, aDoor, y3c), at(O, 3.3, aDoor, y3c), at(O, 3.75, aDoor, y3c));
+    lanternRoom(ctx, y3c, CAGE);
   }
 
   // lamps: small bulkheads, and their light baked into the stair stone, brick and timber
@@ -525,10 +658,12 @@ export function buildStairs(ctx: Ctx): StairInfo {
   ctx.bake.set("domeTimber", (x, y, z) => Math.min(1, light(x, y, z) * 0.9 + 0.04));
   ctx.bake.set("coneWash", (_x, y) => 0.25 + 0.75 * Math.max(0, Math.min(1, (y - 70) / 14)));
 
-  return { zones, lamps, wgDoor1: aWG1 };
+  return { zones, lamps, wgDoor1: aWG1, route };
 }
 
 const INT_AISLE_TOP = 16.2;
+/** Inner half-width of the lantern's main stage (its walls are 0.25 m thick). */
+export const LANTERN_INNER = DOME.lanternHalf - 0.55 - 0.25;
 
 function add(p: V3, t: V3, k: number): V3 {
   return [p[0] + t[0] * k, p[1] + t[1] * k, p[2] + t[2] * k];
@@ -568,13 +703,32 @@ function corridor(b: GeoBuilder, col: GeoBuilder, a: V2, c: V2, y: number, hw: n
 }
 
 /** Cone (or any lathe profile) wall with rectangular door openings, seen from outside. */
-function coneWall(b: GeoBuilder, prof: V2[], doors: { a: number; w: number; y0: number; y1: number }[], inside: boolean, seg = 96) {
+function coneWall(b: GeoBuilder, prof0: V2[], doors: { a: number; w: number; y0: number; y1: number }[], inside: boolean, seg = 96) {
+  // profile rows split exactly at the doors' sill and head
+  const prof = prof0.slice();
+  const rAt = (y: number) => {
+    for (let j = 0; j < prof0.length - 1; j++) {
+      const [ra, ya] = prof0[j], [rb, yb] = prof0[j + 1];
+      if (y >= ya && y <= yb) return ra + ((rb - ra) * (y - ya)) / (yb - ya);
+    }
+    return prof0[prof0.length - 1][0];
+  };
+  for (const d of doors) for (const y of [d.y0, d.y1]) if (y > prof0[0][1] && y < prof0[prof0.length - 1][1]) prof.push([rAt(y), y]);
+  prof.sort((p, q) => p[1] - q[1]);
+  const holes = doors.map((d) => ({ ...d, a: ((d.a % TAU) + TAU) % TAU }));
   for (let j = 0; j < prof.length - 1; j++) {
     const [ra, ya] = prof[j], [rb, yb] = prof[j + 1];
-    for (let i = 0; i < seg; i++) {
-      const a0 = (i / seg) * TAU, a1 = ((i + 1) / seg) * TAU, am = (a0 + a1) / 2;
-      const rm = (ra + rb) / 2;
-      const cut = doors.find((d) => Math.abs(((am - d.a + Math.PI * 3) % TAU) - Math.PI) < d.w / 2 / rm && (ya + yb) / 2 > d.y0 && (ya + yb) / 2 < d.y1);
+    if (yb - ya < 1e-4) continue;
+    const rm = (ra + rb) / 2, ym = (ya + yb) / 2;
+    const cuts = new Set<number>();
+    for (let i = 0; i <= seg; i++) cuts.add((i / seg) * TAU);
+    for (const d of holes) for (const e of [d.a - d.w / 2 / rm, d.a + d.w / 2 / rm]) cuts.add(((e % TAU) + TAU) % TAU);
+    const angles = [...cuts].sort((p, q) => p - q);
+    for (let i = 0; i < angles.length - 1; i++) {
+      const a0 = angles[i], a1 = angles[i + 1];
+      if (a1 - a0 < 1e-6) continue;
+      const am = (a0 + a1) / 2;
+      const cut = holes.some((d) => Math.abs(((am - d.a + Math.PI * 3) % TAU) - Math.PI) < d.w / 2 / rm && ym > d.y0 && ym < d.y1);
       if (cut) continue;
       const slope = (ra - rb) / Math.max(1e-6, yb - ya);
       let nx = Math.cos(am), ny = slope, nz = Math.sin(am);
@@ -600,28 +754,19 @@ function outerInner(): V2[] {
 }
 
 /** The small room inside the lantern where the spiral arrives; the door to the Golden Gallery. */
-function lanternRoom(ctx: Ctx, y: number) {
+function lanternRoom(ctx: Ctx, y: number, well: number) {
   const st = ctx.g("stairStone");
   const col = ctx.col;
-  const iron = ctx.g("iron");
-  const half = DOME.lanternHalf - 0.55 - 0.5; // inner face of the main stage
+  const half = LANTERN_INNER; // inner face of the main stage
   const c = 0.8;
   const oct: V2[] = [[half, -half + c], [half, half - c], [half - c, half], [-half + c, half], [-half, half - c], [-half, -half + c], [-half + c, -half], [half - c, -half]];
-  const hole = circleAt(0.98, 24);
+  const hole = circleAt(well + 0.03, 32);
   st.withPaint({ joint: JOINT.blocks, cav: 0.85 }, () => {
     st.cap(oct, y, true, [hole]);
     st.cap(oct, y - 0.25, false, [hole]);
-    st.lathe([[0.98, y - 0.25], [0.98, y]], 24, { inside: true });
+    st.lathe([[well + 0.03, y - 0.25], [well + 0.03, y]], 32, { inside: true });
   });
   col.cap(oct, y, true, [hole]);
-  // railing round the stairwell, open where the spiral arrives
-  const pts: V3[] = [];
-  const aOpen = ROUTE.lanternDoor;
-  for (let i = 0; i <= 20; i++) {
-    const a = aOpen + 0.55 + (i / 20) * (TAU - 1.1);
-    pts.push([1.02 * Math.cos(a), y, 1.02 * Math.sin(a)]);
-  }
-  iron.withPaint({ cav: 1 }, () => railing(iron, col, pts, 1.0));
   // walls (inside faces): the lantern's windows on the four main faces, the doorway to the south
   const yWin0 = y + 0.45 + 0.6, yWin1 = DOME.lanternMainTop - 0.7 - 1.3;
   for (let i = 0; i < 8; i++) {

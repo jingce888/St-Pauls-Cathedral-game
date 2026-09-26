@@ -221,10 +221,10 @@ export function buildDome(ctx: Ctx) {
   // gilded railing
   goldenRailing(gold, rGG + 0.18, yGG, 1.12);
   ctx.col.cap(cw(circle(rGG + 0.4, 48)), yGG, true, [circle(2.9, 32)]);
-  ctx.col.lathe([[rGG + 0.05, yGG - 0.2], [rGG + 0.05, yGG + 1.3]], 48, { inside: true });
+  ctx.col.lathe([[rGG + 0.15, yGG - 0.2], [rGG + 0.15, yGG + 1.3]], 48, { inside: true });
   // the lantern's base (with the door on the south face, see stairs.ts)
   {
-    const h = DOME.lanternHalf + 0.12, c = 1.1;
+    const h = DOME.lanternHalf + 0.12, c = 1.35;
     const oct: V2[] = [[h, -h + c], [h, h - c], [h - c, h], [-h + c, h], [-h, h - c], [-h, -h + c], [-h + c, -h], [h - c, -h]];
     for (let i = 0; i < 8; i++) {
       const a = oct[i], b = oct[(i + 1) % 8];
@@ -303,7 +303,7 @@ function lantern(ctx: Ctx) {
   const cham = (h: number, c: number): V2[] => [
     [h, -h + c], [h, h - c], [h - c, h], [-h + c, h], [-h, h - c], [-h, -h + c], [-h + c, -h], [h - c, -h],
   ];
-  const toSurf = (poly: V2[], y0: number, y1: number, openings: (face: number, len: number) => Opening[] = () => [], doorFace = -1) => {
+  const toSurf = (poly: V2[], y0: number, y1: number, openings: (face: number, len: number) => Opening[] = () => [], doorFace = -1, depth = 0.5) => {
     // walls of an octagon (chamfered square) as panels with openings on the four main faces
     for (let i = 0; i < poly.length; i++) {
       const a = poly[i], b = poly[(i + 1) % poly.length];
@@ -319,21 +319,21 @@ function lantern(ctx: Ctx) {
         const outl = openingOutline(o, 10);
         if (i / 2 === doorFace) {
           // the doorway: jambs and arch only (the passage itself is built with the lantern room)
-          if (o.head !== "flat") stone.withPaint({ joint: JOINT.none, cav: 0.55 }, () => revealOnSurface(stone, surf, outl.slice(1).concat([outl[0]]), 0.5, false));
+          if (o.head !== "flat") stone.withPaint({ joint: JOINT.none, cav: 0.55 }, () => revealOnSurface(stone, surf, outl.slice(1).concat([outl[0]]), depth, false));
           continue;
         }
-        stone.withPaint({ joint: JOINT.none, cav: 0.55 }, () => revealOnSurface(stone, surf, outl, 0.5));
-        ctx.g("glass").withPaint({ cav: 0.8 }, () => fillOnSurface(ctx.g("glass"), surf, outl, 0.5));
+        stone.withPaint({ joint: JOINT.none, cav: 0.55 }, () => revealOnSurface(stone, surf, outl, depth));
+        ctx.g("glass").withPaint({ cav: 0.8 }, () => fillOnSurface(ctx.g("glass"), surf, outl, depth));
         stone.withPaint({ joint: JOINT.none }, () => sweepOnSurface(stone, surf, new P(0, 0).to(0, 0.07).to(0.16, 0.07).to(0.16, 0).build(), outl, true, { outwardFrom: [(o.s0 + o.s1) / 2, (o.y0 + o.y1) / 2] }));
       }
     }
   };
   // podium (low, with a doorway on the south face onto the Golden Gallery)
   const y1 = yGG + 0.45;
-  toSurf(cham(half + 0.1, 1.1), yGG - 0.1, y1, (f, L) => (f === 1 ? [{ s0: L / 2 - 0.55, s1: L / 2 + 0.55, y0: yGG, y1: y1 + 0.02, head: "flat" }] : []), 1);
+  toSurf(cham(half + 0.1, 1.35), yGG - 0.1, y1, (f, L) => (f === 1 ? [{ s0: L / 2 - 0.55, s1: L / 2 + 0.55, y0: yGG, y1: y1 + 0.02, head: "flat" }] : []), 1);
   {
     // cornice round the podium, open at the door; the podium's top between it and the core
-    const h = half + 0.1, c = 1.1;
+    const h = half + 0.1, c = 1.35;
     const path: V2[] = [[-0.62, h], [-h + c, h], [-h, h - c], [-h, -h + c], [-h + c, -h], [h - c, -h], [h, -h + c], [h, h - c], [h - c, h], [0.62, h]];
     stone.sweep(cornice(0.3, 0.16, y1 - 0.3), path, false, { capEnds: true });
     const hi = half - 0.55, ci = 1.2;
@@ -351,11 +351,12 @@ function lantern(ctx: Ctx) {
   }
   // main stage: core with tall arched windows (the south one is the door), columns at the angles
   const y2 = DOME.lanternMainTop - 0.7;
-  toSurf(cham(half - 0.55, 1.2), y1, DOME.lanternMainTop, (f, L) => [{ s0: L / 2 - 0.55, s1: L / 2 + 0.55, y0: f === 1 ? y1 - 0.01 : y1 + 0.6, y1: y2 - 1.3, head: "round" }], 1);
+  toSurf(cham(half - 0.55, 1.2), y1, DOME.lanternMainTop, (f, L) => [{ s0: L / 2 - 0.55, s1: L / 2 + 0.55, y0: f === 1 ? y1 - 0.01 : y1 + 0.6, y1: y2 - 1.3, head: "round" }], 1, 0.25);
   for (let q = 0; q < 4; q++) {
     const a = (45 + 90 * q) * DEG;
     const c = Math.cos(a), s = Math.sin(a);
-    const rr = (half - 0.1) * Math.SQRT2 - 0.35;
+    // the column pairs stand on the plinth between the core and its chamfered corner
+    const rr = 3.08;
     for (const k of [-1, 1]) {
       const px = c * rr + -s * k * 0.62, pz = s * rr + c * k * 0.62;
       column(ctx, px, pz, y1, y2, 0.44, { cap: "capC", plinth: true, yaw: -a + Math.PI / 2 });
